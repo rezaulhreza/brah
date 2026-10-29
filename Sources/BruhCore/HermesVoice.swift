@@ -2,33 +2,42 @@ import Foundation
 
 /// The Hermes web backend, which owns the voice. Its audio routes use the speech providers the
 /// user chose in Hermes (Deepgram, ElevenLabs, Edge, local Whisper and others), so Bruh needs no
-/// speech account of its own. The backend wants the same sign-in as the Hermes phone app.
+/// speech account of its own.
 public struct HermesVoiceSettings: Equatable, Sendable {
     public var url: URL
-    public var username: String
-    public var password: String
+    public var username: String?
+    public var password: String?
 
-    public init(url: URL, username: String, password: String) {
+    public init(url: URL, username: String? = nil, password: String? = nil) {
         self.url = url
         self.username = username
         self.password = password
     }
 
-    public static let defaultURL = URL(string: "http://127.0.0.1:9130")!
+    /// The port of `hermes dashboard`.
+    public static let defaultURL = URL(string: "http://127.0.0.1:9119")!
 
     /// The environment first, then `voice` in the `hermes` object of `~/.config/bruh/config.json`:
     /// `{"hermes": {"voice": {"url": "...", "username": "...", "password": "..."}}}`.
-    /// No username and password means no Hermes voice: Bruh then uses the voice of the Mac.
+    /// The sign-in is only for a dashboard that asks for one.
     public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
-                            home: URL = FileManager.default.homeDirectoryForCurrentUser) -> HermesVoiceSettings? {
+                            home: URL = FileManager.default.homeDirectoryForCurrentUser) -> HermesVoiceSettings {
         let voice = HermesSettings.configSection(home: home)?["voice"] as? [String: Any]
         let url = environment["BRUH_HERMES_VOICE_URL"].flatMap(URL.init(string:))
             ?? (voice?["url"] as? String).flatMap(URL.init(string:))
-        guard let username = environment["BRUH_HERMES_USERNAME"] ?? voice?["username"] as? String,
-              let password = environment["BRUH_HERMES_PASSWORD"] ?? voice?["password"] as? String,
-              !username.isEmpty, !password.isEmpty
+        let username = environment["BRUH_HERMES_USERNAME"] ?? voice?["username"] as? String
+        let password = environment["BRUH_HERMES_PASSWORD"] ?? voice?["password"] as? String
+        return HermesVoiceSettings(url: url ?? defaultURL,
+                                   username: username?.isEmpty == false ? username : nil,
+                                   password: password?.isEmpty == false ? password : nil)
+    }
+
+    /// The session token a local dashboard puts in its page, when it shares it.
+    static func pageToken(_ html: String) -> String? {
+        guard let match = html.firstMatch(of: try! Regex(#"__HERMES_SESSION_TOKEN__\s*=\s*"([^"]+)""#)),
+              let token = match.output[1].substring
         else { return nil }
-        return HermesVoiceSettings(url: url ?? defaultURL, username: username, password: password)
+        return String(token)
     }
 }
 
@@ -55,12 +64,40 @@ public struct Sound: Equatable, Sendable {
 public actor HermesVoice {
     private let settings: HermesVoiceSettings
     private let session: URLSession
-    private var signedIn = false
+    /// How the backend let Bruh in: its session token, or a cookie from the password sign-in.
+    private var token: String?
+    private var connected = false
 
     public init(settings: HermesVoiceSettings) {
         self.settings = settings
-        // Its own cookie jar: the backend keeps the sign-in in a cookie.
+        // Its own cookie jar: a password sign-in lives in a cookie.
         session = URLSession(configuration: .ephemeral)
+    }
+
+    /// Get in to the backend. A local dashboard that shares its session token needs no setup.
+    /// One that asks for a sign-in needs the username and password from the settings.
+    public func connect() async throws {
+        connected = false
+        token = nil
+
+        if let (data, response) = try? await session.data(from: settings.url),
+           (response as? HTTPURLResponse)?.statusCode == 200,
+           let found = HermesVoiceSettings.pageToken(String(decoding: data, as: UTF8.self)) {
+            token = found
+            connected = true
+            return
+        }
+
+        guard let username = settings.username, let password = settings.password else {
+            throw AgentError.notConfigured(
+                "The Hermes dashboard at \(settings.url.absoluteString) asks for a sign-in. Add hermes.voice.username and hermes.voice.password to ~/.config/bruh/config.json.")
+        }
+        let body = ["provider": "basic", "username": username, "password": password, "next": "/"]
+        let (data, status) = try await send("auth/password-login", body: body)
+        guard (200..<300).contains(status) else {
+            throw AgentError.http(status, "Hermes refused the voice sign-in. \(String(decoding: data, as: UTF8.self))")
+        }
+        connected = true
     }
 
     /// Words from a recording. An empty string means the provider heard no words.
@@ -91,28 +128,18 @@ public actor HermesVoice {
         return task
     }
 
-    /// One sign-in, and one more after a 401: the backend may have restarted and lost the cookie.
+    /// Connect once, and again after a 401: the backend may have restarted with a new token.
     private func post(_ path: String, body: [String: Any]) async throws -> [String: Any] {
-        if !signedIn {
-            try await signIn()
+        if !connected {
+            try await connect()
         }
         var (data, status) = try await send(path, body: body)
         if status == 401 {
-            try await signIn()
+            try await connect()
             (data, status) = try await send(path, body: body)
         }
         guard (200..<300).contains(status) else { throw AgentError.http(status, String(decoding: data, as: UTF8.self)) }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
-    }
-
-    private func signIn() async throws {
-        let body = ["provider": "basic", "username": settings.username, "password": settings.password, "next": "/"]
-        let (data, status) = try await send("auth/password-login", body: body)
-        guard (200..<300).contains(status) else {
-            signedIn = false
-            throw AgentError.http(status, "Hermes refused the voice sign-in. \(String(decoding: data, as: UTF8.self))")
-        }
-        signedIn = true
     }
 
     private func send(_ path: String, body: [String: Any]) async throws -> (Data, Int) {
@@ -122,6 +149,9 @@ public actor HermesVoice {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("bruh", forHTTPHeaderField: "X-Requested-With")
+        if let token {
+            request.setValue(token, forHTTPHeaderField: "X-Hermes-Session-Token")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: request)
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)

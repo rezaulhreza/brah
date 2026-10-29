@@ -154,14 +154,20 @@ final class VoiceTests: XCTestCase {
         XCTAssertEqual(wav[24..<28].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }, 16_000)
     }
 
-    func testVoiceSettingsNeedUsernameAndPassword() throws {
+    func testVoiceSettingsDefaultToTheLocalDashboard() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        XCTAssertNil(HermesVoiceSettings.load(environment: ["BRUH_HERMES_USERNAME": "u"], home: home))
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home), HermesVoiceSettings(url: HermesVoiceSettings.defaultURL))
 
         try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
-        try #"{"hermes": {"voice": {"username": "u", "password": "p"}}}"#
+        try #"{"hermes": {"voice": {"url": "http://h:2", "username": "u", "password": "p"}}}"#
             .write(to: home.appendingPathComponent(".config/bruh/config.json"), atomically: true, encoding: .utf8)
         XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home),
-                       HermesVoiceSettings(url: HermesVoiceSettings.defaultURL, username: "u", password: "p"))
+                       HermesVoiceSettings(url: URL(string: "http://h:2")!, username: "u", password: "p"))
+    }
+
+    func testPageToken() {
+        XCTAssertEqual(HermesVoiceSettings.pageToken(#"<script>window.__HERMES_SESSION_TOKEN__="abc-1_2";</script>"#), "abc-1_2")
+        XCTAssertEqual(HermesVoiceSettings.pageToken(#"window.__HERMES_SESSION_TOKEN__ = "x";"#), "x")
+        XCTAssertNil(HermesVoiceSettings.pageToken("<html>Sign in</html>"))
     }
 }

@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shown = ""
     private var shownFilter = SpokenText()
     private var speakItem: NSMenuItem?
+    private var voiceItem: NSMenuItem?
 
     private var speaks: Bool {
         get { UserDefaults.standard.object(forKey: "speak") as? Bool ?? true }
@@ -31,9 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         agent = HermesSettings.load().map { HermesConnection(settings: $0) }
-        voice = Voice(hermes: HermesVoiceSettings.load().map { HermesVoice(settings: $0) })
         voice.log = { [weak self] line in self?.log(line) }
-        log("agent: \(agent?.name ?? "none"), voice: \(voice.route)")
+        connectVoice()
+        log("agent: \(agent?.name ?? "none")")
         bubble.model.agentName = agent?.name ?? "Hermes"
         bubble.model.onSubmit = { [weak self] question in self?.submit(question) }
 
@@ -49,6 +50,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { _ = await Recorder.allowed() }
         buildMenu()
         runTestArguments()
+    }
+
+    /// Use the Hermes voice when the backend lets Bruh in. Until then, and when it does not, the
+    /// Mac speaks.
+    private func connectVoice() {
+        let hermes = HermesVoice(settings: HermesVoiceSettings.load())
+        Task {
+            do {
+                try await hermes.connect()
+                voice = Voice(hermes: hermes)
+            } catch {
+                log("Hermes voice not available: \(error.localizedDescription)")
+            }
+            voice.log = { [weak self] line in self?.log(line) }
+            voiceItem?.title = "Voice: \(voice.route)"
+            log("voice: \(voice.route)")
+        }
     }
 
     private func log(_ line: String) {
@@ -255,6 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let voiceLine = NSMenuItem(title: "Voice: \(voice.route)", action: nil, keyEquivalent: "")
         voiceLine.isEnabled = false
         menu.addItem(voiceLine)
+        voiceItem = voiceLine
         let hint = NSMenuItem(title: "Hold ⌃⌥Space to talk, tap to type", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)

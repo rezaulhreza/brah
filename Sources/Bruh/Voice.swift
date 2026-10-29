@@ -213,9 +213,24 @@ final class Voice {
                 }
             }
             guard !Task.isCancelled else { return }
-            system.speak(AVSpeechUtterance(string: text))
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = Self.bestMacVoice
+            system.speak(utterance)
         }
     }
+
+    /// The most natural installed voice for the user's language: Premium, then Enhanced. More
+    /// can be added in System Settings > Accessibility > Spoken Content > System Voice.
+    static let bestMacVoice: AVSpeechSynthesisVoice? = {
+        let language = AVSpeechSynthesisVoice.currentLanguageCode()
+        let prefix = String(language.prefix(2))
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
+        let ranked = voices.sorted { lhs, rhs in
+            if lhs.quality != rhs.quality { return lhs.quality.rawValue > rhs.quality.rawValue }
+            return (lhs.language == language ? 1 : 0) > (rhs.language == language ? 1 : 0)
+        }
+        return ranked.first ?? AVSpeechSynthesisVoice(language: language)
+    }()
 
     /// Silence now. A live reply is told to stop, so the server stops making sound.
     func stop() {
