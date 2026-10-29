@@ -297,3 +297,88 @@ final class ShortcutSettingsTests: XCTestCase {
         XCTAssertEqual(shortcuts.handsFree.display, "F6")
     }
 }
+
+final class ConfigFileTests: XCTestCase {
+    private func temporaryHome() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    }
+
+    private func writeConfig(_ text: String, home: URL) throws {
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try text.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8)
+    }
+
+    func testReadMissingFileIsEmptyAndBrokenFileThrows() throws {
+        let home = temporaryHome()
+        XCTAssertTrue(try ConfigFile.read(home: home).isEmpty)
+        try writeConfig("{not json", home: home)
+        XCTAssertThrowsError(try ConfigFile.read(home: home)) { XCTAssertEqual($0 as? ConfigFile.Failure, .notJSON) }
+    }
+
+    func testWriteMakesFolderAndPrivateFile() throws {
+        let home = temporaryHome()
+        try ConfigFile.write(["a": 1], home: home)
+        let attributes = try FileManager.default.attributesOfItem(atPath: ConfigFile.url(home: home).path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        XCTAssertEqual(try ConfigFile.read(home: home)["a"] as? Int, 1)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: home.appendingPathComponent(".config/bruh").path)
+        XCTAssertEqual(leftovers, ["config.json"])
+    }
+
+    func testSaveKeepsKeysTheWindowDoesNotManage() throws {
+        let home = temporaryHome()
+        try writeConfig(#"""
+        {"hermes": {"url": "http://old:1", "key": "file-key", "model": "x",
+                    "voice": {"url": "http://v:2", "password": "file-pass"}},
+         "shortcuts": {"talk": "cmd+shift+space", "volume": "ctrl+v"},
+         "other": [1, 2]}
+        """#, home: home)
+
+        var settings = EditableSettings(json: try ConfigFile.read(home: home))
+        XCTAssertEqual(settings.hermesURL, "http://old:1")
+        XCTAssertEqual(settings.voiceURL, "http://v:2")
+        XCTAssertEqual(settings.shortcuts.talk.display, "⇧⌘Space")
+        XCTAssertEqual(settings.handsFree, HandsFreeSettings())
+
+        settings.hermesURL = " http://new:3 "
+        settings.voiceURL = ""
+        settings.voiceUsername = "rez"
+        settings.shortcuts.handsFree = Shortcut.parse("f6")!
+        settings.handsFree = HandsFreeSettings(enabled: true, idleSeconds: 45)
+        try ConfigFile.write(settings.applied(to: try ConfigFile.read(home: home)), home: home)
+
+        let json = try ConfigFile.read(home: home)
+        let hermes = try XCTUnwrap(json["hermes"] as? [String: Any])
+        XCTAssertEqual(hermes["url"] as? String, "http://new:3")
+        XCTAssertEqual(hermes["key"] as? String, "file-key")
+        XCTAssertEqual(hermes["model"] as? String, "x")
+        let voice = try XCTUnwrap(hermes["voice"] as? [String: Any])
+        XCTAssertNil(voice["url"])
+        XCTAssertEqual(voice["username"] as? String, "rez")
+        XCTAssertEqual(voice["password"] as? String, "file-pass")
+        let shortcuts = try XCTUnwrap(json["shortcuts"] as? [String: String])
+        XCTAssertEqual(shortcuts["talk"], "shift+cmd+space")
+        XCTAssertEqual(shortcuts["handsFree"], "f6")
+        XCTAssertEqual(shortcuts["volume"], "ctrl+v")
+        XCTAssertEqual(json["other"] as? [Int], [1, 2])
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: true, idleSeconds: 45))
+        XCTAssertEqual(Shortcuts.load(home: home).0.handsFree.display, "F6")
+    }
+
+    func testEmptyTextsRemoveEmptyObjects() {
+        let json = EditableSettings().applied(to: ["hermes": ["url": "http://h:1", "voice": ["username": "u"]]])
+        XCTAssertNil(json["hermes"])
+        XCTAssertNotNil(json["shortcuts"])
+    }
+
+    func testHandsFreeDefaultsAndLimits() throws {
+        let home = temporaryHome()
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: false, idleSeconds: 20))
+        try writeConfig(#"{"handsFree": {"enabled": true, "idleSeconds": 500}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: true, idleSeconds: 120))
+        try writeConfig(#"{"handsFree": {"idleSeconds": 3}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home).idleSeconds, 10)
+        try writeConfig(#"{"handsFree": {"enabled": "yes", "idleSeconds": "30"}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings())
+    }
+}

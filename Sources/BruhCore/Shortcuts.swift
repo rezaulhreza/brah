@@ -212,7 +212,7 @@ public struct Shortcuts: Equatable, Sendable {
 /// `~/.config/bruh/config.json`.
 public enum Config {
     public static func json(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: home.appendingPathComponent(".config/bruh/config.json")) else { return nil }
+        guard let data = try? Data(contentsOf: ConfigFile.url(home: home)) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }
