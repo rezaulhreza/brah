@@ -34,10 +34,7 @@ public struct HermesSettings: Equatable, Sendable {
 
     /// The `hermes` object of `~/.config/bruh/config.json`.
     static func configSection(home: URL) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: home.appendingPathComponent(".config/bruh/config.json")),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return json["hermes"] as? [String: Any]
+        Config.json(home: home)?["hermes"] as? [String: Any]
     }
 
     static func envValue(_ text: String, name: String) -> String? {

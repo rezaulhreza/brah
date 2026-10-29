@@ -1,4 +1,5 @@
 import Carbon.HIToolbox
+import BruhCore
 import Foundation
 
 /// System-wide hotkeys through Carbon. They need no Accessibility permission and work in the
@@ -14,8 +15,9 @@ enum Hotkeys {
     private static var refs: [EventHotKeyRef?] = []
     private static var installed = false
 
-    static let control = controlKey
-    static let option = optionKey
+    static func register(_ shortcut: Shortcut, onRelease: (() -> Void)? = nil, onPress: @escaping () -> Void) {
+        register(shortcut.keyCode, modifiers: shortcut.modifiers, onRelease: onRelease, onPress: onPress)
+    }
 
     static func register(_ keyCode: Int, modifiers: Int, onRelease: (() -> Void)? = nil, onPress: @escaping () -> Void) {
         installIfNeeded()

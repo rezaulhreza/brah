@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The answer as far as it has arrived, without POINT lines.
     private var shown = ""
     private var shownFilter = SpokenText()
+    private var shortcuts = Shortcuts.defaults
     private var speakItem: NSMenuItem?
     private var voiceItem: NSMenuItem?
 
@@ -38,11 +39,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble.model.agentName = agent?.name ?? "Hermes"
         bubble.model.onSubmit = { [weak self] question in self?.submit(question) }
 
-        let both = Hotkeys.control | Hotkeys.option
-        Hotkeys.register(kVK_Space, modifiers: both, onRelease: { [weak self] in self?.released() }) { [weak self] in self?.pressed() }
-        Hotkeys.register(kVK_ANSI_Period, modifiers: both) { [weak self] in self?.stop() }
-        Hotkeys.register(kVK_ANSI_H, modifiers: both) { [weak self] in self?.hide() }
-        Hotkeys.register(kVK_ANSI_M, modifiers: both) { [weak self] in self?.toggleMute() }
+        let problems: [String]
+        (shortcuts, problems) = Shortcuts.load()
+        problems.forEach { log($0) }
+        Hotkeys.register(shortcuts.talk, onRelease: { [weak self] in self?.released() }) { [weak self] in self?.pressed() }
+        Hotkeys.register(shortcuts.stop) { [weak self] in self?.stop() }
+        Hotkeys.register(shortcuts.hide) { [weak self] in self?.hide() }
+        Hotkeys.register(shortcuts.mute) { [weak self] in self?.toggleMute() }
 
         if !CGPreflightScreenCaptureAccess() {
             CGRequestScreenCaptureAccess()
@@ -126,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard !Task.isCancelled else { return }
                 log("heard \(String(format: "%.1f", recording.seconds)) s: \(words.debugDescription)")
                 guard !words.isEmpty else {
-                    bubble.model.phase = .failed("I did not hear any words. Hold ⌃⌥Space while you talk.")
+                    bubble.model.phase = .failed("I did not hear any words. Hold \(shortcuts.talk.display) while you talk.")
                     return
                 }
                 bubble.model.question = words
@@ -262,15 +265,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = icon
 
         let menu = NSMenu()
-        menu.addItem(entry("Type a question", key: "", action: #selector(menuType)))
-        menu.addItem(entry("Stop", key: ".", action: #selector(menuStop)))
-        menu.addItem(entry("Hide", key: "h", action: #selector(menuHide)))
+        menu.addItem(entry("Type a question", shortcut: nil, action: #selector(menuType)))
+        menu.addItem(entry("Stop", shortcut: shortcuts.stop, action: #selector(menuStop)))
+        menu.addItem(entry("Hide", shortcut: shortcuts.hide, action: #selector(menuHide)))
         menu.addItem(.separator())
-        let speak = entry("Speak replies", key: "m", action: #selector(toggleSpeak))
+        let speak = entry("Speak replies", shortcut: shortcuts.mute, action: #selector(toggleSpeak))
         speak.state = speaks ? .on : .off
         menu.addItem(speak)
         speakItem = speak
-        menu.addItem(entry("New conversation", key: "", action: #selector(newConversation)))
+        menu.addItem(entry("New conversation", shortcut: nil, action: #selector(newConversation)))
         menu.addItem(.separator())
         let agentLine = NSMenuItem(title: agent == nil ? "Hermes: no key found" : "Connected to Hermes", action: nil, keyEquivalent: "")
         agentLine.isEnabled = false
@@ -279,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voiceLine.isEnabled = false
         menu.addItem(voiceLine)
         voiceItem = voiceLine
-        let hint = NSMenuItem(title: "Hold ⌃⌥Space to talk, tap to type", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: "Hold \(shortcuts.talk.display) to talk, tap to type", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
@@ -289,13 +292,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
-    private func entry(_ title: String, key: String, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+    /// A menu item that shows its global shortcut on the right, as macOS menus do.
+    private func entry(_ title: String, shortcut: Shortcut?, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: shortcut.map(Self.keyEquivalent) ?? "")
         item.target = self
-        if !key.isEmpty {
-            item.keyEquivalentModifierMask = [.control, .option]
+        if let shortcut {
+            var mask: NSEvent.ModifierFlags = []
+            if shortcut.modifiers & Shortcut.control != 0 { mask.insert(.control) }
+            if shortcut.modifiers & Shortcut.option != 0 { mask.insert(.option) }
+            if shortcut.modifiers & Shortcut.shift != 0 { mask.insert(.shift) }
+            if shortcut.modifiers & Shortcut.command != 0 { mask.insert(.command) }
+            item.keyEquivalentModifierMask = mask
         }
         return item
+    }
+
+    private static func keyEquivalent(_ shortcut: Shortcut) -> String {
+        let label = String(shortcut.display.drop(while: { "⌃⌥⇧⌘".contains($0) }))
+        let special: [String: Int] = ["←": NSLeftArrowFunctionKey, "→": NSRightArrowFunctionKey, "↓": NSDownArrowFunctionKey,
+                                      "↑": NSUpArrowFunctionKey]
+        switch label {
+        case "Space": return " "
+        case "Return": return "\r"
+        case "Tab": return "\t"
+        case "Esc": return "\u{1b}"
+        case "Delete": return "\u{8}"
+        default:
+            if let code = special[label] { return String(UnicodeScalar(UInt16(code)).map(Character.init) ?? " ") }
+            if label.hasPrefix("F"), let number = Int(label.dropFirst()) {
+                return String(UnicodeScalar(UInt16(NSF1FunctionKey + number - 1)).map(Character.init) ?? " ")
+            }
+            return label.lowercased()
+        }
     }
 
     @objc private func menuType() {

@@ -171,3 +171,42 @@ final class VoiceTests: XCTestCase {
         XCTAssertNil(HermesVoiceSettings.pageToken("<html>Sign in</html>"))
     }
 }
+
+final class ShortcutTests: XCTestCase {
+    func testParse() {
+        XCTAssertEqual(Shortcut.parse("ctrl+option+space"), Shortcut(keyCode: 49, modifiers: Shortcut.control | Shortcut.option, display: "⌃⌥Space"))
+        XCTAssertEqual(Shortcut.parse(" Cmd + Shift + . ")?.display, "⇧⌘.")
+        XCTAssertEqual(Shortcut.parse("alt+k")?.keyCode, 40)
+        XCTAssertEqual(Shortcut.parse("f5"), Shortcut(keyCode: 96, modifiers: 0, display: "F5"))
+    }
+
+    func testRefusesKeysThatWouldStealTyping() {
+        XCTAssertNil(Shortcut.parse("space"))
+        XCTAssertNil(Shortcut.parse("m"))
+        XCTAssertNil(Shortcut.parse("ctrl+banana"))
+        XCTAssertNil(Shortcut.parse("hyper+space"))
+        XCTAssertNil(Shortcut.parse("ctrl+"))
+    }
+
+    func testResolveKeepsDefaultsAndReportsProblems() {
+        let (shortcuts, problems) = Shortcuts.resolve(["talk": "cmd+shift+space", "mute": "nope", "volume": "ctrl+v"])
+        XCTAssertEqual(shortcuts.talk.display, "⇧⌘Space")
+        XCTAssertEqual(shortcuts.mute, Shortcuts.defaults.mute)
+        XCTAssertEqual(shortcuts.stop, Shortcuts.defaults.stop)
+        XCTAssertEqual(problems.count, 2)
+    }
+
+    func testDuplicateGoesBackToDefault() {
+        let (shortcuts, problems) = Shortcuts.resolve(["talk": "ctrl+option+h"])
+        XCTAssertEqual(shortcuts, Shortcuts.defaults)
+        XCTAssertTrue(problems.first?.contains("both talk and hide") == true)
+    }
+
+    func testSwapIsAllowed() {
+        let (shortcuts, problems) = Shortcuts.resolve(["talk": "ctrl+option+.", "stop": "ctrl+option+space"])
+        XCTAssertEqual(shortcuts.talk.display, "⌃⌥.")
+        XCTAssertEqual(shortcuts.stop.display, "⌃⌥Space")
+        XCTAssertEqual(problems, [])
+    }
+}
+
