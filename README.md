@@ -6,7 +6,18 @@ screen, and your own agent answers out loud and points at the place.
 Bruh only sees, listens, talks and points. The agent you connect does the thinking and any
 clicking. Hermes is the first agent. Claude and OpenClaw come next.
 
+## What it does
+
+- **Sees your screen.** A screenshot of the display under the cursor, with the cursor marked,
+  goes with each question. Bruh's own windows are not in it.
+- **Listens.** Hold the hotkey and talk. Your words show while you talk.
+- **Answers out loud.** The answer streams in, and the voice starts at the first sentence.
+- **Points.** A ring and a label show the exact place on the screen.
+- **Stops when you say.** Stop, mute and hide are each one key.
+
 ## Run it
+
+Needs macOS 14 or later and Xcode.
 
 ```bash
 BRUH_SIGN_IDENTITY="Apple Development" scripts/bundle.sh
@@ -14,7 +25,8 @@ open build/Bruh.app
 ```
 
 On the first run, allow Bruh in System Settings > Privacy & Security for Screen Recording and
-Microphone, then open Bruh again.
+Microphone, then open Bruh again. Without `BRUH_SIGN_IDENTITY` the app is signed ad hoc, and
+macOS asks for Screen Recording again after each build.
 
 | Key | Action |
 |---|---|
@@ -36,19 +48,29 @@ key in this order:
 
 ## Voice
 
-Bruh uses the voice of your Hermes: the speech-to-text and text-to-speech providers you set in
-Hermes (Deepgram, ElevenLabs, Edge, OpenAI, local Whisper and others). When the provider can
-stream, your words show while you talk and the answer is spoken while it arrives. When it cannot,
-Bruh sends the whole recording and speaks the whole answer.
+Bruh speaks and listens with the voice of your Hermes: the speech-to-text and text-to-speech
+providers you set in Hermes (Deepgram, ElevenLabs, Edge, OpenAI, local Whisper and others). When
+the provider can stream, your words show while you talk and the answer is spoken while it
+arrives. When it cannot, Bruh sends the whole recording and speaks the whole answer.
 
-The voice routes are on the Hermes web backend and need its sign-in:
+The voice routes are on the Hermes dashboard (`hermes dashboard`, port 9119 by default).
+
+- **A local dashboard with no sign-in:** nothing to set. Bruh reads the session token that the
+  dashboard gives to local pages.
+- **A dashboard with a sign-in** (for example one with `dashboard.public_url`): give Bruh the
+  same username and password that you use for the dashboard.
 
 ```json
-{"hermes": {"voice": {"url": "http://127.0.0.1:9130", "username": "...", "password": "..."}}}
+{"hermes": {"voice": {"url": "http://127.0.0.1:9119", "username": "...", "password": "..."}}}
 ```
 
 The environment can set `BRUH_HERMES_VOICE_URL`, `BRUH_HERMES_USERNAME` and
-`BRUH_HERMES_PASSWORD` instead. With no Hermes voice, Bruh uses the speech engines of macOS.
+`BRUH_HERMES_PASSWORD` instead. The menu shows which voice Bruh uses.
+
+When Bruh cannot reach the Hermes voice, it uses the speech engines of macOS, with the best
+installed voice for your language. The default macOS voices sound robotic. For a better one,
+download a Premium or Enhanced voice in System Settings > Accessibility > Spoken Content >
+System Voice > Manage Voices.
 
 ## Roadmap
 
@@ -57,7 +79,8 @@ The environment can set `BRUH_HERMES_VOICE_URL`, `BRUH_HERMES_USERNAME` and
 2. **The agent acts.** Hermes clicks and types through `computer_use` (cua-driver) when you ask,
    and Bruh shows each step with the pointer. Stop takes control back at once.
 3. **More agents.** Claude and OpenClaw, with the same see, talk and point contract.
-4. **Settings window.** Choose the agent, the voice and the hotkeys without a config file.
+4. **Settings window.** Choose the agent, the voice and the hotkeys without a config file, with
+   secrets in the Keychain.
 5. **App Store build.** Sandboxed: Bruh keeps to seeing and pointing, and the agent acts.
 
 ## Test
@@ -67,3 +90,9 @@ swift test
 build/Bruh.app/Contents/MacOS/Bruh --ask "Where is the search field?"
 build/Bruh.app/Contents/MacOS/Bruh --talk 5
 ```
+
+## Licence
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). You can read, run and change Bruh for personal and
+other noncommercial use. You cannot sell it, or use it in or for a business, without a separate
+commercial licence from the author. For a commercial licence, open an issue on this repository.
