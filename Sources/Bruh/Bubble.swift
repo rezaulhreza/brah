@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor
 final class BubbleModel: ObservableObject {
     enum Phase: Equatable {
+        case listening
+        case transcribing
         case asking
         case thinking
         case answer(String)
@@ -23,6 +25,17 @@ struct BubbleView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             switch model.phase {
+            case .listening:
+                HStack(spacing: 8) {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    Text(model.question.isEmpty ? "Listening" : model.question).fixedSize(horizontal: false, vertical: true)
+                }
+                hint("release to send")
+            case .transcribing:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(model.question.isEmpty ? "Writing down what you said" : model.question).foregroundStyle(.secondary)
+                }
             case .asking:
                 TextField("Ask \(model.agentName) about your screen", text: $model.question)
                     .textFieldStyle(.plain)
@@ -95,12 +108,17 @@ final class Bubble {
         }
     }
 
-    func show(near mouse: CGPoint, phase: BubbleModel.Phase) {
+    /// `typing` makes the panel take the keyboard. Without it the app the user works in keeps it.
+    func show(near mouse: CGPoint, phase: BubbleModel.Phase, typing: Bool) {
         model.question = ""
         model.phase = phase
         anchor = CGPoint(x: mouse.x + 18, y: mouse.y - 18)
         placeTopLeft()
-        panel.makeKeyAndOrderFront(nil)
+        if typing {
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     func hide() {

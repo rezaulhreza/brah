@@ -4,7 +4,8 @@ import Foundation
 /// the same shape. The agent does any clicking itself. Bruh only sees, talks and points.
 public protocol AgentConnection: Sendable {
     var name: String { get }
-    func ask(_ question: String, snapshot: Snapshot) async throws -> Reply
+    /// `onText` gets each piece of the answer as it arrives, so speech can start before the end.
+    func ask(_ question: String, snapshot: Snapshot, onText: @escaping @Sendable (String) -> Void) async throws -> Reply
     /// Forget the conversation, so the next question starts a new one.
     func reset() async
 }

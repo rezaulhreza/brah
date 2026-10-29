@@ -32,6 +32,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Bruh listens while you hold the hotkey, so you can ask by voice.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Bruh writes down what you say when your agent has no voice of its own.</string>
 </dict>
 </plist>
 PLIST

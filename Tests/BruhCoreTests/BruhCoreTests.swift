@@ -101,11 +101,67 @@ final class HermesTests: XCTestCase {
         let parts = try XCTUnwrap(messages[1]["content"] as? [[String: Any]])
         let image = try XCTUnwrap((parts[1]["image_url"] as? [String: Any])?["url"] as? String)
         XCTAssertEqual(image, "data:image/jpeg;base64,AQID")
+        XCTAssertEqual(body["stream"] as? Bool, true)
+    }
+}
+
+final class StreamingTests: XCTestCase {
+    func testChatStreamLines() {
+        XCTAssertEqual(ChatStream.parse(#"data: {"choices":[{"delta":{"content":"Hi"}}]}"#), .text("Hi"))
+        XCTAssertEqual(ChatStream.parse("data: [DONE]"), .done)
+        XCTAssertNil(ChatStream.parse(#"data: {"choices":[{"delta":{"role":"assistant"}}]}"#))
+        XCTAssertNil(ChatStream.parse(": keep-alive"))
+        XCTAssertNil(ChatStream.parse("event: hermes.tool.progress"))
     }
 
-    func testAnswerText() {
-        let data = Data(#"{"choices":[{"message":{"role":"assistant","content":"Hi"}}]}"#.utf8)
-        XCTAssertEqual(HermesConnection.answerText(data), "Hi")
-        XCTAssertNil(HermesConnection.answerText(Data("{}".utf8)))
+    private func speak(_ pieces: [String]) -> String {
+        var filter = SpokenText()
+        return pieces.map { filter.feed($0) }.joined() + filter.finish()
+    }
+
+    func testPlainTextPassesAtOnce() {
+        var filter = SpokenText()
+        XCTAssertEqual(filter.feed("It is the "), "It is the ")
+        XCTAssertEqual(filter.feed("blue button."), "blue button.")
+    }
+
+    func testPointLineIsNeverSpoken() {
+        XCTAssertEqual(speak(["Click Save.\nPO", "INT 412 ", "230 Save button"]), "Click Save.\n")
+        XCTAssertEqual(speak(["Here.\n[POINT 1 2 x]\n"]), "Here.\n\n")
+    }
+
+    func testWordPointInsideASentenceIsSpoken() {
+        XCTAssertEqual(speak(["It is the ", "Point", " and click tool."]), "It is the Point and click tool.")
+    }
+
+    func testLineThatStartsLikePointIsSpokenWhenItIsNot() {
+        XCTAssertEqual(speak(["Po", "int at the top bar."]), "Point at the top bar.")
+        XCTAssertEqual(speak(["Pol", "ish it."]), "Polish it.")
+    }
+}
+
+final class VoiceTests: XCTestCase {
+    func testSoundFromDataURL() {
+        XCTAssertEqual(Sound(dataURL: "data:audio/mpeg;base64,AQID"), Sound(data: Data([1, 2, 3]), mimeType: "audio/mpeg"))
+        XCTAssertNil(Sound(dataURL: "audio/mpeg;base64,AQID"))
+    }
+
+    func testWAVHeader() {
+        let wav = WAV.file(samples: [1, -1], sampleRate: 16_000)
+        XCTAssertEqual(wav.count, 48)
+        XCTAssertEqual(String(decoding: wav.prefix(4), as: UTF8.self), "RIFF")
+        XCTAssertEqual(String(decoding: wav[8..<12], as: UTF8.self), "WAVE")
+        XCTAssertEqual(wav[24..<28].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }, 16_000)
+    }
+
+    func testVoiceSettingsNeedUsernameAndPassword() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        XCTAssertNil(HermesVoiceSettings.load(environment: ["BRUH_HERMES_USERNAME": "u"], home: home))
+
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try #"{"hermes": {"voice": {"username": "u", "password": "p"}}}"#
+            .write(to: home.appendingPathComponent(".config/bruh/config.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home),
+                       HermesVoiceSettings(url: HermesVoiceSettings.defaultURL, username: "u", password: "p"))
     }
 }

@@ -2,19 +2,25 @@ import Carbon.HIToolbox
 import Foundation
 
 /// System-wide hotkeys through Carbon. They need no Accessibility permission and work in the
-/// App Sandbox, so they stay when Bruh moves to the App Store.
+/// App Sandbox, so they stay when Bruh moves to the App Store. A hotkey reports both the press
+/// and the release, which is what hold-to-talk needs.
 enum Hotkeys {
-    private static var actions: [UInt32: () -> Void] = [:]
+    private struct Actions {
+        var press: () -> Void
+        var release: (() -> Void)?
+    }
+
+    private static var actions: [UInt32: Actions] = [:]
     private static var refs: [EventHotKeyRef?] = []
     private static var installed = false
 
     static let control = controlKey
     static let option = optionKey
 
-    static func register(_ keyCode: Int, modifiers: Int, action: @escaping () -> Void) {
+    static func register(_ keyCode: Int, modifiers: Int, onRelease: (() -> Void)? = nil, onPress: @escaping () -> Void) {
         installIfNeeded()
         let id = UInt32(actions.count + 1)
-        actions[id] = action
+        actions[id] = Actions(press: onPress, release: onRelease)
 
         var ref: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: OSType(0x4252_5548), id: id) // "BRUH"
@@ -26,14 +32,25 @@ enum Hotkeys {
         guard !installed else { return }
         installed = true
 
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        var specs = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
+        ]
         InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
             var hotKeyID = EventHotKeyID()
             GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
             let id = hotKeyID.id
-            DispatchQueue.main.async { Hotkeys.actions[id]?() }
+            let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
+            DispatchQueue.main.async {
+                guard let action = Hotkeys.actions[id] else { return }
+                if pressed {
+                    action.press()
+                } else {
+                    action.release?()
+                }
+            }
             return noErr
-        }, 1, &spec, nil, nil)
+        }, specs.count, &specs, nil, nil)
     }
 }

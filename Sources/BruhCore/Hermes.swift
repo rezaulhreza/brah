@@ -19,9 +19,7 @@ public struct HermesSettings: Equatable, Sendable {
         var url = environment["BRUH_HERMES_URL"].flatMap(URL.init(string:))
         var key = environment["BRUH_HERMES_KEY"]
 
-        if let data = try? Data(contentsOf: home.appendingPathComponent(".config/bruh/config.json")),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let hermes = json["hermes"] as? [String: Any] {
+        if let hermes = configSection(home: home) {
             url = url ?? (hermes["url"] as? String).flatMap(URL.init(string:))
             key = key ?? hermes["key"] as? String
         }
@@ -32,6 +30,14 @@ public struct HermesSettings: Equatable, Sendable {
 
         guard let key, !key.isEmpty else { return nil }
         return HermesSettings(url: url ?? defaultURL, key: key)
+    }
+
+    /// The `hermes` object of `~/.config/bruh/config.json`.
+    static func configSection(home: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: home.appendingPathComponent(".config/bruh/config.json")),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return json["hermes"] as? [String: Any]
     }
 
     static func envValue(_ text: String, name: String) -> String? {
@@ -62,20 +68,36 @@ public actor HermesConnection: AgentConnection {
         sessionID = nil
     }
 
-    public func ask(_ question: String, snapshot: Snapshot) async throws -> Reply {
+    public func ask(_ question: String, snapshot: Snapshot, onText: @escaping @Sendable (String) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, settings: settings, sessionID: sessionID)
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let (bytes, response) = try await session.bytes(for: request)
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
 
         guard (200..<300).contains(status) else {
-            throw AgentError.http(status, String(decoding: data, as: UTF8.self))
+            var body = Data()
+            for try await byte in bytes.prefix(2000) { body.append(byte) }
+            throw AgentError.http(status, String(decoding: body, as: UTF8.self))
         }
 
-        if let id = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Hermes-Session-Id"), !id.isEmpty {
+        if let id = http?.value(forHTTPHeaderField: "X-Hermes-Session-Id"), !id.isEmpty {
             sessionID = id
         }
 
-        guard let text = Self.answerText(data), !text.isEmpty else { throw AgentError.emptyReply }
+        var text = ""
+        for try await line in bytes.lines {
+            switch ChatStream.parse(line) {
+            case .text(let piece):
+                text += piece
+                onText(piece)
+            case .done:
+                break
+            case nil:
+                continue
+            }
+        }
+
+        guard !text.isEmpty else { throw AgentError.emptyReply }
         return Reply.parse(text)
     }
 
@@ -92,7 +114,7 @@ public actor HermesConnection: AgentConnection {
         let image = "data:image/jpeg;base64,\(snapshot.jpeg.base64EncodedString())"
         let body: [String: Any] = [
             "model": "hermes-agent",
-            "stream": false,
+            "stream": true,
             "messages": [
                 ["role": "system", "content": Brief.system(for: snapshot)],
                 ["role": "user", "content": [
@@ -103,13 +125,5 @@ public actor HermesConnection: AgentConnection {
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
-    }
-
-    static func answerText(_ data: Data) -> String? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any]
-        else { return nil }
-        return message["content"] as? String
     }
 }
