@@ -210,3 +210,40 @@ final class ShortcutTests: XCTestCase {
     }
 }
 
+final class DeepgramLiveTests: XCTestCase {
+    private let status: [String: Any] = [
+        "available": true, "voice": "aura-2-thalia-en", "listen_model": "flux-general-en", "eot_threshold": 0.7,
+        "eot_timeout_ms": 3000, "speed": 1.1, "keyterms": ["Hermes", "Bruh"], "mip_opt_out": true,
+    ]
+
+    func testSettingsNeedAWorkingPlugin() {
+        XCTAssertNotNil(DeepgramLiveSettings(status: status))
+        var off = status
+        off["available"] = false
+        XCTAssertNil(DeepgramLiveSettings(status: off))
+    }
+
+    func testSpeakURLUsesTheChosenVoice() throws {
+        let url = try XCTUnwrap(DeepgramLiveSettings(status: status)).speakURL().absoluteString
+        XCTAssertTrue(url.hasPrefix("wss://api.deepgram.com/v1/speak?"))
+        XCTAssertTrue(url.contains("model=aura-2-thalia-en"))
+        XCTAssertTrue(url.contains("encoding=linear16"))
+        XCTAssertTrue(url.contains("sample_rate=24000"))
+        XCTAssertTrue(url.contains("speed=1.1"))
+    }
+
+    func testListenURLUsesFluxAndKeyterms() throws {
+        let url = try XCTUnwrap(DeepgramLiveSettings(status: status)).listenURL(sampleRate: 16_000).absoluteString
+        XCTAssertTrue(url.hasPrefix("wss://api.deepgram.com/v2/listen?"))
+        XCTAssertTrue(url.contains("model=flux-general-en"))
+        XCTAssertTrue(url.contains("sample_rate=16000"))
+        XCTAssertTrue(url.contains("keyterm=Hermes&keyterm=Bruh"))
+    }
+
+    func testSentenceSplit() {
+        XCTAssertTrue(DeepgramSpeech.sentences("Hello there. How") == ("Hello there.", " How"))
+        XCTAssertTrue(DeepgramSpeech.sentences("It costs 3.5 pounds") == ("", "It costs 3.5 pounds"))
+        XCTAssertTrue(DeepgramSpeech.sentences("Done!\nNext") == ("Done!\n", "Next"))
+        XCTAssertTrue(DeepgramSpeech.sentences("Wait.") == ("", "Wait."))
+    }
+}

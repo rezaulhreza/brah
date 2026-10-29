@@ -128,23 +128,46 @@ public actor HermesVoice {
         return task
     }
 
+    /// The settings of the `deepgram-live` plugin, or nil when the host has no such plugin or it
+    /// cannot work (no Deepgram key).
+    public func deepgramLive() async -> DeepgramLiveSettings? {
+        guard let json = try? await request("api/plugins/deepgram-live/status", method: "GET", body: nil) else { return nil }
+        return DeepgramLiveSettings(status: json)
+    }
+
+    /// A Deepgram socket, opened with a short-lived token from the plugin. The token rides in the
+    /// WebSocket protocol header, as Deepgram expects from a client without its own key.
+    public func deepgramSocket(_ url: URL) async throws -> URLSessionWebSocketTask {
+        let auth = try await post("api/plugins/deepgram-live/auth", body: [:])
+        guard let scheme = auth["scheme"] as? String, let value = auth["value"] as? String, !value.isEmpty else {
+            throw AgentError.emptyReply
+        }
+        let task = session.webSocketTask(with: url, protocols: [scheme, value])
+        task.resume()
+        return task
+    }
+
     /// Connect once, and again after a 401: the backend may have restarted with a new token.
     private func post(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+        try await request(path, method: "POST", body: body)
+    }
+
+    private func request(_ path: String, method: String, body: [String: Any]?) async throws -> [String: Any] {
         if !connected {
             try await connect()
         }
-        var (data, status) = try await send(path, body: body)
+        var (data, status) = try await send(path, method: method, body: body)
         if status == 401 {
             try await connect()
-            (data, status) = try await send(path, body: body)
+            (data, status) = try await send(path, method: method, body: body)
         }
         guard (200..<300).contains(status) else { throw AgentError.http(status, String(decoding: data, as: UTF8.self)) }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    private func send(_ path: String, body: [String: Any]) async throws -> (Data, Int) {
+    private func send(_ path: String, method: String = "POST", body: [String: Any]?) async throws -> (Data, Int) {
         var request = URLRequest(url: settings.url.appendingPathComponent(path))
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -152,7 +175,9 @@ public actor HermesVoice {
         if let token {
             request.setValue(token, forHTTPHeaderField: "X-Hermes-Session-Token")
         }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
         let (data, response) = try await session.data(for: request)
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }

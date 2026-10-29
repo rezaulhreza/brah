@@ -3,7 +3,7 @@ import Foundation
 /// Live words while the user talks: microphone PCM goes to `transcribe-stream`, partial text comes
 /// back. When the provider has no live mode the socket says so, and `finish` returns nil: the
 /// caller then sends the whole recording to `/api/audio/transcribe`.
-public final class LiveTranscriber: @unchecked Sendable {
+public final class LiveTranscriber: WordStream, @unchecked Sendable {
     private let socket: URLSessionWebSocketTask
     private let lock = NSLock()
     private var final: CheckedContinuation<String?, Never>?
@@ -89,19 +89,11 @@ public final class LiveTranscriber: @unchecked Sendable {
 
 /// Live speech while the answer arrives: text goes to `speak-stream`, PCM comes back sentence by
 /// sentence. `stop` is barge-in: the server stops at once.
-public final class LiveSpeech: @unchecked Sendable {
-    public enum Event: Sendable {
-        case start(sampleRate: Double)
-        case pcm(Data)
-        /// The server made no sound. Say the whole answer another way.
-        case fallback
-        case end
-    }
-
+public final class LiveSpeech: SpeechStream, @unchecked Sendable {
     private let socket: URLSessionWebSocketTask
-    private let onEvent: @Sendable (Event) -> Void
+    private let onEvent: @Sendable (SpeechEvent) -> Void
 
-    public init(socket: URLSessionWebSocketTask, onEvent: @escaping @Sendable (Event) -> Void) {
+    public init(socket: URLSessionWebSocketTask, onEvent: @escaping @Sendable (SpeechEvent) -> Void) {
         self.socket = socket
         self.onEvent = onEvent
         receive()

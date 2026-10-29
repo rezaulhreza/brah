@@ -85,6 +85,8 @@ final class Recorder {
 @MainActor
 final class Voice {
     private let hermes: HermesVoice?
+    /// The user's own live voice in Hermes, when the host has the `deepgram-live` plugin.
+    private let deepgram: DeepgramLiveSettings?
     private let system = AVSpeechSynthesizer()
     private let pcm = PCMPlayer()
     private var player: AVAudioPlayer?
@@ -92,19 +94,28 @@ final class Voice {
     private var reply: LiveReply?
     var log: (String) -> Void = { _ in }
 
-    init(hermes: HermesVoice?) {
+    init(hermes: HermesVoice?, deepgram: DeepgramLiveSettings? = nil) {
         self.hermes = hermes
+        self.deepgram = hermes == nil ? nil : deepgram
     }
 
-    var route: String { hermes == nil ? "Mac voice" : "Hermes voice" }
+    var route: String {
+        if let deepgram { return "Deepgram Live, \(deepgram.voice)" }
+        return hermes == nil ? "Mac voice" : "Hermes voice"
+    }
 
     // MARK: Listening
 
     /// Live words while the user talks, or nil when there is no live route.
-    func listen(to recorder: Recorder, onPartial: @escaping @MainActor (String) -> Void) async -> LiveTranscriber? {
+    func listen(to recorder: Recorder, onPartial: @escaping @MainActor (String) -> Void) async -> WordStream? {
         guard let hermes else { return nil }
         do {
-            let live = LiveTranscriber(socket: try await hermes.socket("api/audio/transcribe-stream"), sampleRate: Int(Recorder.sampleRate))
+            let live: WordStream
+            if let deepgram {
+                live = DeepgramListen(socket: try await hermes.deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
+            } else {
+                live = LiveTranscriber(socket: try await hermes.socket("api/audio/transcribe-stream"), sampleRate: Int(Recorder.sampleRate))
+            }
             live.onPartial = { text in DispatchQueue.main.async { MainActor.assumeIsolated { onPartial(text) } } }
             recorder.attach { [live] samples in live.send(samples) }
             return live
@@ -115,8 +126,8 @@ final class Voice {
     }
 
     /// The words of a finished recording: the live result when there is one, else the whole file.
-    func words(live: LiveTranscriber?, wav: Data) async throws -> String {
-        if let live, let words = await live.finish() {
+    func words(live: WordStream?, wav: Data) async throws -> String {
+        if let live, let words = await live.finish(timeout: 6) {
             log("live transcript")
             return words
         }
@@ -140,17 +151,27 @@ final class Voice {
         self.reply = reply
         Task {
             do {
-                let socket = try await hermes.socket("api/audio/speak-stream")
+                let onEvent: @Sendable (SpeechEvent) -> Void = { [weak self] event in
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(event, of: reply) } }
+                }
+                let socket = if let deepgram {
+                    try await hermes.deepgramSocket(deepgram.speakURL())
+                } else {
+                    try await hermes.socket("api/audio/speak-stream")
+                }
                 guard self.reply === reply else {
                     socket.cancel(with: .goingAway, reason: nil)
                     return
                 }
-                reply.open(LiveSpeech(socket: socket) { [weak self] event in
-                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(event, of: reply) } }
-                })
+                reply.open(deepgram == nil ? LiveSpeech(socket: socket, onEvent: onEvent) : DeepgramSpeech(socket: socket, onEvent: onEvent))
             } catch {
                 log("live speech not available: \(error.localizedDescription)")
                 reply.failed = true
+                // The answer may already be complete: say it the other way now.
+                if self.reply === reply, let text = reply.text {
+                    self.reply = nil
+                    sayWhole(text)
+                }
             }
         }
     }
@@ -171,29 +192,42 @@ final class Voice {
         reply.finish()
         if reply.failed {
             self.reply = nil
-            say(text)
+            sayWhole(text)
         }
     }
 
-    private func handle(_ event: LiveSpeech.Event, of reply: LiveReply) {
+    private func handle(_ event: SpeechEvent, of reply: LiveReply) {
         guard self.reply === reply else { return }
         switch event {
         case .start(let rate):
-            log("speaking live with Hermes at \(Int(rate)) Hz")
+            log("speaking live (\(route)) at \(Int(rate)) Hz")
             pcm.start(sampleRate: rate)
         case .pcm(let data):
             pcm.play(data)
         case .fallback:
             log("live speech made no sound, saying it another way")
             self.reply = nil
-            if let text = reply.text { say(text) }
+            if let text = reply.text { sayWhole(text) }
         case .end:
             break
         }
     }
 
-    /// The whole text at once: Hermes when it can, else the Mac.
+    /// A whole text. The Hermes live stream first, because it sends raw PCM, which always plays.
     func say(_ text: String) {
+        guard hermes != nil else {
+            stop()
+            sayWithMac(text)
+            return
+        }
+        beginReply()
+        replyPiece(text)
+        endReply(text)
+    }
+
+    /// The last resorts: the Hermes file route, then the Mac. The file can be a format macOS does
+    /// not play (Ogg Opus from some providers); then the Mac speaks.
+    private func sayWhole(_ text: String) {
         speaking?.cancel()
         speaking = Task {
             if let hermes {
@@ -213,10 +247,14 @@ final class Voice {
                 }
             }
             guard !Task.isCancelled else { return }
-            let utterance = AVSpeechUtterance(string: text)
-            utterance.voice = Self.bestMacVoice
-            system.speak(utterance)
+            sayWithMac(text)
         }
+    }
+
+    private func sayWithMac(_ text: String) {
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = Self.bestMacVoice
+        system.speak(utterance)
     }
 
     /// The most natural installed voice for the user's language: Premium, then Enhanced. More
@@ -251,11 +289,11 @@ private final class LiveReply {
     var filter = SpokenText()
     var text: String?
     var failed = false
-    private var speech: LiveSpeech?
+    private var speech: SpeechStream?
     private var queue: [String] = []
     private var finished = false
 
-    func open(_ speech: LiveSpeech) {
+    func open(_ speech: SpeechStream) {
         self.speech = speech
         queue.forEach(speech.feed)
         queue = []

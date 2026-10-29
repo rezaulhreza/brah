@@ -17,12 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var capture: Task<Snapshot, Error>?
     private var pressedAt: Date?
     /// Opens the live words socket while the user talks. Nil result: no live route.
-    private var listening: Task<LiveTranscriber?, Never>?
+    private var listening: Task<WordStream?, Never>?
     private var work: Task<Void, Never>?
     /// The answer as far as it has arrived, without POINT lines.
     private var shown = ""
     private var shownFilter = SpokenText()
     private var shortcuts = Shortcuts.defaults
+    private var voiceReady: Task<Void, Never>?
     private var speakItem: NSMenuItem?
     private var voiceItem: NSMenuItem?
 
@@ -59,10 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Mac speaks.
     private func connectVoice() {
         let hermes = HermesVoice(settings: HermesVoiceSettings.load())
-        Task {
+        voiceReady = Task {
             do {
                 try await hermes.connect()
-                voice = Voice(hermes: hermes)
+                voice = Voice(hermes: hermes, deepgram: await hermes.deepgramLive())
             } catch {
                 log("Hermes voice not available: \(error.localizedDescription)")
             }
@@ -236,6 +237,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// of the hotkey would. Both are for tests and scripts.
     private func runTestArguments() {
         let arguments = CommandLine.arguments
+        guard arguments.contains("--ask") || arguments.contains("--talk") else { return }
+        Task {
+            await voiceReady?.value
+            runTest(arguments)
+        }
+    }
+
+    private func runTest(_ arguments: [String]) {
         if let index = arguments.firstIndex(of: "--ask"), index + 1 < arguments.count {
             let question = arguments[index + 1]
             capture = Task { try await Capture.snapshot() }
