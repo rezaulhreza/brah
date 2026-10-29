@@ -14,8 +14,9 @@ bundle_id="${BRUH_BUNDLE_ID:-local.bruh.app}"
 swift build -c "$config"
 app="build/Bruh.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp ".build/$config/Bruh" "$app/Contents/MacOS/Bruh"
+cp Resources/AppIcon.icns Resources/MenuIcon.png Resources/MenuIcon@2x.png "$app/Contents/Resources/"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -26,6 +27,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Bruh</string>
   <key>CFBundleIdentifier</key><string>${bundle_id}</string>
   <key>CFBundleExecutable</key><string>Bruh</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>

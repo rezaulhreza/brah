@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="drop" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <clipPath id="eyeL"><circle cx="372" cy="522" r="50"/></clipPath>
+    <clipPath id="eyeR"><circle cx="490" cy="522" r="50"/></clipPath>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="#FFC531"/>
+
+  <!-- The cursor, unimpressed -->
+  <g filter="url(#drop)">
+    <path d="M300 170 L300 770 L444 638 L540 854 L636 812 L540 602 L732 602 Z"
+          fill="#FFFFFF" stroke="#1B1B1B" stroke-width="30" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Eyes: half shut, looking to the side -->
+  <g stroke="#1B1B1B" stroke-width="14">
+    <circle cx="372" cy="522" r="50" fill="#FFFFFF"/>
+    <circle cx="490" cy="522" r="50" fill="#FFFFFF"/>
+  </g>
+  <circle cx="402" cy="538" r="20" fill="#1B1B1B"/>
+  <circle cx="520" cy="538" r="20" fill="#1B1B1B"/>
+  <g clip-path="url(#eyeL)"><rect x="312" y="464" width="120" height="58" fill="#E6E1D6"/></g>
+  <g clip-path="url(#eyeR)"><rect x="430" y="464" width="120" height="58" fill="#E6E1D6"/></g>
+  <g stroke="#1B1B1B" stroke-width="14" stroke-linecap="round" fill="none">
+    <circle cx="372" cy="522" r="50"/>
+    <circle cx="490" cy="522" r="50"/>
+    <line x1="322" y1="522" x2="422" y2="522"/>
+    <line x1="440" y1="522" x2="540" y2="522"/>
+  </g>
+
+  <!-- Brows: one flat, one up -->
+  <g stroke="#1B1B1B" stroke-width="18" stroke-linecap="round">
+    <line x1="332" y1="446" x2="410" y2="450"/>
+    <line x1="456" y1="430" x2="514" y2="412"/>
+  </g>
+
+  <!-- Mouth: flat, a bit off -->
+  <line x1="366" y1="606" x2="430" y2="600" stroke="#1B1B1B" stroke-width="16" stroke-linecap="round"/>
+</svg>

@@ -254,7 +254,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "Bruh")
+        let icon = Bundle.main.image(forResource: "MenuIcon")
+            ?? NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "Bruh")
+        icon?.isTemplate = true
+        icon?.size = NSSize(width: 18, height: 18)
+        icon?.accessibilityDescription = "Bruh"
+        item.button?.image = icon
 
         let menu = NSMenu()
         menu.addItem(entry("Type a question", key: "", action: #selector(menuType)))
