@@ -1,26 +1,35 @@
 import Foundation
 
 /// Where Hermes listens and the key it wants. Nothing here is stored in the source.
+/// Hermes can run on this Mac or on a server (a VPS, through a Cloudflare tunnel or Tailscale).
 public struct HermesSettings: Equatable, Sendable {
     public var url: URL
     public var key: String
+    /// Extra headers for each request: the Cloudflare Access pair when it is set, else none.
+    public var headers: [String: String]
 
-    public init(url: URL, key: String) {
+    public init(url: URL, key: String, headers: [String: String] = [:]) {
         self.url = url
         self.key = key
+        self.headers = headers
     }
 
     public static let defaultURL = URL(string: "http://127.0.0.1:8642")!
 
+    /// True when Hermes runs on this Mac.
+    public var isLocal: Bool { CloudflareAccess.isLocal(url) }
+
     /// First match wins: the environment, then the Keychain (the key only, see `Secrets`), then
     /// `~/.config/bruh/config.json`, then the `API_SERVER_KEY` line of `~/.hermes/.env` (a stock
     /// Hermes install on this Mac). `secret` looks up a Keychain account; nil means the Keychain
-    /// when `home` is the user's own home folder.
+    /// when `home` is the user's own home folder. The Cloudflare Access headers come from
+    /// `CloudflareAccess.headers`.
     public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
                             home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             secret: ((String) -> String?)? = nil) -> HermesSettings? {
+        let secret = Secrets.lookup(secret, home: home)
         var url = environment["BRUH_HERMES_URL"].flatMap(URL.init(string:))
-        var key = environment["BRUH_HERMES_KEY"] ?? Secrets.lookup(secret, home: home)(Secrets.hermesKey)
+        var key = environment["BRUH_HERMES_KEY"] ?? secret(Secrets.hermesKey)
 
         if let hermes = configSection(home: home) {
             url = url ?? (hermes["url"] as? String).flatMap(URL.init(string:))
@@ -32,7 +41,8 @@ public struct HermesSettings: Equatable, Sendable {
         }
 
         guard let key, !key.isEmpty else { return nil }
-        return HermesSettings(url: url ?? defaultURL, key: key)
+        return HermesSettings(url: url ?? defaultURL, key: key,
+                              headers: CloudflareAccess.headers(environment: environment, secret: secret))
     }
 
     /// The `hermes` object of `~/.config/bruh/config.json`.

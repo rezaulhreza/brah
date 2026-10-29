@@ -7,34 +7,43 @@ public struct HermesVoiceSettings: Equatable, Sendable {
     public var url: URL
     public var username: String?
     public var password: String?
+    /// Extra headers for each request: the Cloudflare Access pair when it is set, else none.
+    public var headers: [String: String]
 
-    public init(url: URL, username: String? = nil, password: String? = nil) {
+    public init(url: URL, username: String? = nil, password: String? = nil, headers: [String: String] = [:]) {
         self.url = url
         self.username = username
         self.password = password
+        self.headers = headers
     }
 
     /// The port of `hermes dashboard`.
     public static let defaultURL = URL(string: "http://127.0.0.1:9119")!
 
+    /// True when the dashboard runs on this Mac.
+    public var isLocal: Bool { CloudflareAccess.isLocal(url) }
+
     /// The environment first, then `voice` in the `hermes` object of `~/.config/bruh/config.json`:
     /// `{"hermes": {"voice": {"url": "...", "username": "...", "password": "..."}}}`.
     /// The password comes from the Keychain before the file (see `Secrets`). `secret` looks up a
     /// Keychain account; nil means the Keychain when `home` is the user's own home folder.
-    /// The sign-in is only for a dashboard that asks for one.
+    /// The sign-in is only for a dashboard that asks for one. The Cloudflare Access headers come
+    /// from `CloudflareAccess.headers`.
     public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
                             home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             secret: ((String) -> String?)? = nil) -> HermesVoiceSettings {
+        let secret = Secrets.lookup(secret, home: home)
         let voice = HermesSettings.configSection(home: home)?["voice"] as? [String: Any]
         let url = environment["BRUH_HERMES_VOICE_URL"].flatMap(URL.init(string:))
             ?? (voice?["url"] as? String).flatMap(URL.init(string:))
         let username = environment["BRUH_HERMES_USERNAME"] ?? voice?["username"] as? String
         let password = environment["BRUH_HERMES_PASSWORD"]
-            ?? Secrets.lookup(secret, home: home)(Secrets.voicePassword)
+            ?? secret(Secrets.voicePassword)
             ?? voice?["password"] as? String
         return HermesVoiceSettings(url: url ?? defaultURL,
                                    username: username?.isEmpty == false ? username : nil,
-                                   password: password?.isEmpty == false ? password : nil)
+                                   password: password?.isEmpty == false ? password : nil,
+                                   headers: CloudflareAccess.headers(environment: environment, secret: secret))
     }
 
     /// The session token a local dashboard puts in its page, when it shares it.

@@ -8,6 +8,9 @@ public enum Secrets {
     public static let hermesKey = "hermes.key"
     /// The password of the Hermes dashboard, for a dashboard with a sign-in.
     public static let voicePassword = "hermes.voice.password"
+    /// The Cloudflare Access service token, for a Hermes behind Cloudflare Access.
+    public static let accessClientID = "cf-access.client-id"
+    public static let accessClientSecret = "cf-access.client-secret"
 
     public struct Failure: Error, CustomStringConvertible {
         public var status: OSStatus

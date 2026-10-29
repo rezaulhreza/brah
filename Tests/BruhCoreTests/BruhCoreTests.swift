@@ -421,3 +421,37 @@ final class SecretLookupTests: XCTestCase {
         XCTAssertEqual(Secrets.lookup(keychain, home: other)(Secrets.hermesKey), "chain-key")
     }
 }
+
+final class RemoteHermesTests: XCTestCase {
+    private let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    private let access: (String) -> String? = {
+        ["hermes.key": "k", "cf-access.client-id": "chain-id", "cf-access.client-secret": "chain-secret"][$0]
+    }
+
+    func testAccessHeadersNeedBothValues() {
+        let both = ["CF-Access-Client-Id": "chain-id", "CF-Access-Client-Secret": "chain-secret"]
+        XCTAssertEqual(CloudflareAccess.headers(environment: [:], secret: access), both)
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: access)["CF-Access-Client-Id"], "env-id")
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: { _ in nil }), [:])
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "i", "BRUH_CF_ACCESS_CLIENT_SECRET": " "], secret: { _ in nil }), [:])
+    }
+
+    func testLoadersFillTheHeaders() throws {
+        let hermes = try XCTUnwrap(HermesSettings.load(environment: ["BRUH_HERMES_URL": "https://hermes.example.com"], home: home, secret: access))
+        XCTAssertEqual(hermes.headers["CF-Access-Client-Secret"], "chain-secret")
+        XCTAssertFalse(hermes.isLocal)
+        let voice = HermesVoiceSettings.load(environment: [:], home: home, secret: access)
+        XCTAssertEqual(voice.headers["CF-Access-Client-Id"], "chain-id")
+        XCTAssertTrue(voice.isLocal)
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: { _ in nil }).headers, [:])
+    }
+
+    func testIsLocal() {
+        for text in ["http://127.0.0.1:8642", "http://localhost:9119", "http://LOCALHOST", "http://[::1]:8642"] {
+            XCTAssertTrue(HermesSettings(url: URL(string: text)!, key: "k").isLocal, text)
+        }
+        for text in ["https://hermes.example.com", "http://100.64.0.2:8642", "http://my-mac.tail1234.ts.net:8642"] {
+            XCTAssertFalse(HermesVoiceSettings(url: URL(string: text)!).isLocal, text)
+        }
+    }
+}
