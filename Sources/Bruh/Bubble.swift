@@ -59,6 +59,7 @@ struct BubbleView: View {
         .font(.system(size: 14))
         .padding(12)
         .frame(width: 340, alignment: .leading)
+        .background(DragArea())
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
     }
@@ -66,6 +67,24 @@ struct BubbleView: View {
     private func hint(_ text: String) -> some View {
         Text(text).font(.system(size: 11)).foregroundStyle(.tertiary)
     }
+}
+
+/// The empty parts of the bubble move it, so it never sits on top of what the user needs.
+private struct DragArea: NSViewRepresentable {
+    final class View: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .openHand)
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView { View() }
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 
 /// A panel that takes typing without making Bruh the active app, so the app the user works in
@@ -85,6 +104,9 @@ final class Bubble {
     let model = BubbleModel()
     private let panel: BubblePanel
     private var anchor = CGPoint.zero
+    /// Set when the user drags the bubble: from then on it stays where they put it.
+    private var dragged: CGPoint?
+    private var placing = false
 
     var isVisible: Bool { panel.isVisible }
 
@@ -102,9 +124,16 @@ final class Bubble {
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host
 
-        // The panel grows with its text. Keep its top-left corner where it opened.
+        // The panel grows with its text. Keep its top-left corner where it opened, or where the
+        // user dragged it.
         NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.placeTopLeft() }
+            MainActor.assumeIsolated { self?.place() }
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.placing else { return }
+                self.dragged = CGPoint(x: self.panel.frame.minX, y: self.panel.frame.maxY)
+            }
         }
     }
 
@@ -113,7 +142,8 @@ final class Bubble {
         model.question = ""
         model.phase = phase
         anchor = CGPoint(x: mouse.x + 18, y: mouse.y - 18)
-        placeTopLeft()
+        dragged = nil
+        place()
         if typing {
             panel.makeKeyAndOrderFront(nil)
         } else {
@@ -125,7 +155,13 @@ final class Bubble {
         panel.orderOut(nil)
     }
 
-    private func placeTopLeft() {
+    private func place() {
+        placing = true
+        defer { placing = false }
+        if let dragged {
+            panel.setFrameTopLeftPoint(dragged)
+            return
+        }
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(anchor, $0.frame, false) }) ?? NSScreen.main else { return }
         let size = panel.frame.size
         let visible = screen.visibleFrame
