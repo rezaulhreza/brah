@@ -12,12 +12,15 @@ public struct HermesSettings: Equatable, Sendable {
 
     public static let defaultURL = URL(string: "http://127.0.0.1:8642")!
 
-    /// First match wins: the environment, then `~/.config/bruh/config.json`, then the
-    /// `API_SERVER_KEY` line of `~/.hermes/.env` (a stock Hermes install on this Mac).
+    /// First match wins: the environment, then the Keychain (the key only, see `Secrets`), then
+    /// `~/.config/bruh/config.json`, then the `API_SERVER_KEY` line of `~/.hermes/.env` (a stock
+    /// Hermes install on this Mac). `secret` looks up a Keychain account; nil means the Keychain
+    /// when `home` is the user's own home folder.
     public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
-                            home: URL = FileManager.default.homeDirectoryForCurrentUser) -> HermesSettings? {
+                            home: URL = FileManager.default.homeDirectoryForCurrentUser,
+                            secret: ((String) -> String?)? = nil) -> HermesSettings? {
         var url = environment["BRUH_HERMES_URL"].flatMap(URL.init(string:))
-        var key = environment["BRUH_HERMES_KEY"]
+        var key = environment["BRUH_HERMES_KEY"] ?? Secrets.lookup(secret, home: home)(Secrets.hermesKey)
 
         if let hermes = configSection(home: home) {
             url = url ?? (hermes["url"] as? String).flatMap(URL.init(string:))

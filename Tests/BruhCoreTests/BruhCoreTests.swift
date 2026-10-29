@@ -382,3 +382,42 @@ final class ConfigFileTests: XCTestCase {
         XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings())
     }
 }
+
+final class SecretLookupTests: XCTestCase {
+    private func home(config: String?, env: String?) throws -> URL {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let manager = FileManager.default
+        try manager.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try manager.createDirectory(at: home.appendingPathComponent(".hermes"), withIntermediateDirectories: true)
+        if let config { try config.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8) }
+        if let env { try env.write(to: home.appendingPathComponent(".hermes/.env"), atomically: true, encoding: .utf8) }
+        return home
+    }
+
+    private let keychain: (String) -> String? = { ["hermes.key": "chain-key", "hermes.voice.password": "chain-pass"][$0] }
+    private let emptyKeychain: (String) -> String? = { _ in nil }
+
+    func testKeyOrderEnvironmentKeychainFileDotEnv() throws {
+        let home = try home(config: #"{"hermes": {"key": "file-key"}}"#, env: "API_SERVER_KEY=env-file-key")
+        XCTAssertEqual(HermesSettings.load(environment: ["BRUH_HERMES_KEY": "env"], home: home, secret: keychain)?.key, "env")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: keychain)?.key, "chain-key")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: emptyKeychain)?.key, "file-key")
+
+        let noFileKey = try self.home(config: #"{"hermes": {"url": "http://h:1"}}"#, env: "API_SERVER_KEY=env-file-key")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: noFileKey, secret: emptyKeychain),
+                       HermesSettings(url: URL(string: "http://h:1")!, key: "env-file-key"))
+    }
+
+    func testPasswordOrderEnvironmentKeychainFile() throws {
+        let home = try home(config: #"{"hermes": {"voice": {"username": "u", "password": "file-pass"}}}"#, env: nil)
+        XCTAssertEqual(HermesVoiceSettings.load(environment: ["BRUH_HERMES_PASSWORD": "env"], home: home, secret: keychain).password, "env")
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: keychain).password, "chain-pass")
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: emptyKeychain).password, "file-pass")
+    }
+
+    func testAnotherHomeFolderNeverReadsTheKeychain() {
+        let other = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        XCTAssertNil(Secrets.lookup(nil, home: other)(Secrets.hermesKey))
+        XCTAssertEqual(Secrets.lookup(keychain, home: other)(Secrets.hermesKey), "chain-key")
+    }
+}
