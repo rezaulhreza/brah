@@ -247,3 +247,53 @@ final class DeepgramLiveTests: XCTestCase {
         XCTAssertTrue(DeepgramSpeech.sentences("Wait.") == ("", "Wait."))
     }
 }
+
+final class ShortcutSettingsTests: XCTestCase {
+    func testHandsFreeSlot() {
+        XCTAssertEqual(Shortcuts.defaults.handsFree.display, "⌃⌥J")
+        XCTAssertEqual(Shortcuts.resolve(["handsFree": "cmd+shift+j"]).0.handsFree.display, "⇧⌘J")
+
+        let (shortcuts, problems) = Shortcuts.resolve(["handsFree": "ctrl+option+space"])
+        XCTAssertEqual(shortcuts, Shortcuts.defaults)
+        XCTAssertTrue(problems.first?.contains("both talk and handsFree") == true)
+
+        let unknown = Shortcuts.resolve(["wake": "ctrl+option+w"]).1
+        XCTAssertEqual(unknown, ["Unknown shortcut name \"wake\". The names are talk, stop, mute, hide and handsFree."])
+    }
+
+    func testConfigTextRoundTripsForEveryKey() {
+        XCTAssertEqual(Shortcuts.defaults.talk.configText, "ctrl+option+space")
+        XCTAssertEqual(Shortcut.parse("cmd+alt+shift+ctrl+escape")?.configText, "ctrl+option+shift+cmd+esc")
+        for (name, _) in Shortcut.keys {
+            for modifiers in ["ctrl", "option+shift", "ctrl+option+shift+cmd"] {
+                let shortcut = Shortcut.parse("\(modifiers)+\(name)")
+                XCTAssertNotNil(shortcut, name)
+                XCTAssertEqual(shortcut.flatMap { Shortcut.parse($0.configText) }, shortcut, name)
+            }
+        }
+        XCTAssertEqual(Shortcut.parse("f12")?.configText, "f12")
+    }
+
+    func testFromKeyCode() {
+        let control = Shortcut.control, option = Shortcut.option
+        XCTAssertEqual(Shortcut.from(keyCode: 49, modifiers: control | option), Shortcut.parse("ctrl+option+space"))
+        XCTAssertEqual(Shortcut.from(keyCode: 96, modifiers: 0), Shortcut.parse("f5"))
+        // Caps Lock (1 << 10) and other bits do not count.
+        XCTAssertEqual(Shortcut.from(keyCode: 46, modifiers: Shortcut.command | 1 << 10), Shortcut.parse("cmd+m"))
+        XCTAssertNil(Shortcut.from(keyCode: 46, modifiers: 0))
+        XCTAssertNil(Shortcut.from(keyCode: 46, modifiers: 1 << 10))
+        XCTAssertNil(Shortcut.from(keyCode: 200, modifiers: control))
+        for key in Shortcut.keyList {
+            XCTAssertEqual(Shortcut.from(keyCode: key.code, modifiers: control), Shortcut.parse("ctrl+\(key.name)"), key.name)
+        }
+    }
+
+    func testShortcutsByName() {
+        var shortcuts = Shortcuts.defaults
+        XCTAssertEqual(Shortcuts.names, ["talk", "stop", "mute", "hide", "handsFree"])
+        XCTAssertEqual(shortcuts["hide"], Shortcuts.defaults.hide)
+        XCTAssertNil(shortcuts["wake"])
+        shortcuts["handsFree"] = Shortcut.parse("f6")
+        XCTAssertEqual(shortcuts.handsFree.display, "F6")
+    }
+}
