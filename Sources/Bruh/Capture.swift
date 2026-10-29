@@ -51,7 +51,12 @@ enum Capture {
         let cursor = Snapshot.imagePoint(mouse: mouse, frame: frame, scale: scale)
         let size = CGSize(width: image.width, height: image.height)
 
-        return Snapshot(jpeg: jpeg(marking(image, at: cursor)), imageSize: size, screenFrame: frame, scale: scale,
+        let data = jpeg(marking(image, at: cursor))
+        // BRUH_SNAPSHOT_PATH saves the exact picture the agent gets, to check what it sees.
+        if let path = ProcessInfo.processInfo.environment["BRUH_SNAPSHOT_PATH"] {
+            try? data.write(to: URL(fileURLWithPath: path))
+        }
+        return Snapshot(jpeg: data, imageSize: size, screenFrame: frame, scale: scale,
                         cursor: cursor, appName: front?.localizedName, windowTitle: front.flatMap { title(of: $0.processIdentifier) })
     }
 
