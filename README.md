@@ -1,45 +1,56 @@
 # Brah
 
-Said "brah". A helper that sits next to your cursor on the Mac. Hold a hotkey, or say
-"Hey Brah", ask about what is on the screen, and your own agent answers out loud and points at
-the place. Ask it to do something, and it does it after your yes.
+> **Ho, brah.** Your mate next to the cursor.
 
-Brah sees, listens, talks and points. The agent you connect does the thinking and the clicking.
-Hermes is the first agent. Claude and OpenClaw come next.
+Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer on the
+Mac. Hold a key or say **"Hey Brah"**, ask about whatever is on your screen, and your own AI agent
+answers out loud and points at the thing. Ask it to do the thing, and it does. After you say yes.
+Not before.
+
+**Bruh** is the face you make when the Export button was right there all along.
+**Brah** is the mate who points at it.
+
+That face is the icon: a cursor giving you the side-eye.
+
+Brah sees, listens, talks and points. Your agent does the thinking and the clicking. Hermes is
+the first agent. Claude and OpenClaw are next in the queue.
 
 ![Brah answers out loud and points at the Export button](docs/screenshots/answer.png)
 
 ## In pictures
 
-The app and the data in these pictures are made up.
+Fake app, fake bills, fake people. Real Brah.
 
 | | |
 |---|---|
 | ![Listening while the hotkey is held](docs/screenshots/listening.png) | ![A typed question](docs/screenshots/typing.png) |
-| **Listening.** Hold the hotkey and talk. Your words show while you talk. | **Typing.** Tap the hotkey to type instead. |
+| **Listening.** Hold the key and ask like you would ask a mate. Your words show as you talk. | **Typing.** Tap the key instead. For libraries and open-plan offices. |
 | ![The agent at work](docs/screenshots/thinking.png) | ![The agent asks before it acts](docs/screenshots/approval.png) |
-| **Working.** Each step the agent takes shows in the bubble. | **Asking first.** Nothing happens on the screen until you allow it. |
+| **Working.** Every step shows, so you know what it is up to. | **Asking first.** Nothing gets clicked until you say so. Brah has manners. |
 | ![A hands-free conversation](docs/screenshots/handsfree.png) | ![The Settings window](docs/screenshots/settings.png) |
-| **Hands-free.** After "Hey Brah", talk without the hotkey. Say "bye" to end. | **Settings.** The agent, the voice, Cloudflare Access and the shortcuts. |
+| **Hands-free.** "Hey Brah", then just talk. "Bye" when you are done. | **Settings.** Your agent, your voice, your keys. Secrets go in the Keychain. |
 
 ## What it does
 
-- **Sees your screen.** A screenshot of the display under the cursor, with the cursor marked,
-  goes with each question. Brah's own windows are not in it.
-- **Listens.** Hold the hotkey and talk. Your words show while you talk.
-- **Hands-free.** Say "Hey Brah" to start a conversation. Brah listens again after each answer,
-  until you say "bye" or stop talking for a while. Talk over the voice to stop it. The wake word
-  is heard on the Mac: no audio leaves it until you say "Hey Brah".
-- **Answers out loud.** The answer streams in, and the voice starts at the first sentence. Echo
-  cancellation keeps Brah from hearing itself.
-- **Points.** A ring and a label show the exact place on the screen.
-- **Acts, after your yes.** Ask it to do something on the screen. The agent says what it will do
-  and waits. Click **Allow** or say "yes". Until then, the agent's screen tools are locked.
-  The bubble shows each step. Stop locks the screen again at once.
-- **Stops when you say.** The bubble has buttons to listen, mute, stop and close, and each has a
-  key too. A copy button shows on the answer.
+- **Sees what you see.** Each question takes a screenshot of the screen under your cursor, with
+  the cursor circled. Brah keeps itself out of the picture.
+- **Listens.** Hold the key and talk. Your words show up as you say them.
+- **Hands-free.** Say "Hey Brah" and talk. It listens again after every answer, until you say
+  "bye" or go quiet for a bit. The wake word is heard on the Mac: no audio leaves it until you say
+  "Hey Brah".
+- **Talks back.** The answer streams in, and the voice starts on the first sentence. Echo
+  cancellation stops Brah from hearing itself, which is more than some people manage.
+- **Points.** A ring and a label land on the exact spot. No more "top right. No, the other top
+  right."
+- **Does it for you, after a yes.** Ask it to do something on the screen. The agent says what it
+  will do and waits. Click **Allow** or say "yes". Until then, its screen tools are locked. Every
+  step shows in the bubble, and Stop locks them again at once.
+- **Knows when to be quiet.** Talk over it and it stops. Mute, stop and close are one click or one
+  key away. Every answer has a copy button too.
 
 ## Screen actions
+
+Brah keeps the agent's hands off your screen until you say yes.
 
 Hermes acts on the screen with its `computer_use` tool, which Hermes leaves off for the API
 server. Turn it on for the API server:
@@ -49,13 +60,18 @@ hermes tools enable computer_use --platform api_server
 ```
 
 Brah locks the agent's screen tools until you allow an action. The lock needs the
-`screen-remote` Hermes plugin; without it, the agent's promise to ask first is the only gate.
-Screen actions only work with a Hermes on this Mac. A Hermes on a server would act on the server,
-so Brah tells it not to.
+`screen-remote` Hermes plugin. Without it, the agent's promise to ask first is the only gate.
+
+The lock covers screen and browser tools, not terminal commands. In one test the agent opened an
+app with a terminal command instead of a click. For commands, the promise to ask first is the
+only gate.
+
+Screen actions only work with a Hermes on this Mac. A Hermes on a server would click on the
+server, so Brah tells it not to.
 
 ## Run it
 
-Needs macOS 14 or later and Xcode.
+Needs macOS 14 or later and Xcode. Then it is two lines, brah.
 
 ```bash
 BRAH_SIGN_IDENTITY="Apple Development" scripts/bundle.sh
@@ -123,6 +139,8 @@ dashboard. Brah keeps both in the Keychain. The environment can set
 
 ## Voice
 
+Brah talks with your agent's voice, not a robot's.
+
 **With the `deepgram-live` Hermes plugin**, Brah uses your live voice: the Aura voice, the Flux
 listening model, the speed and the key terms that you set under `deepgram_live` in the Hermes
 config. The plugin keeps your Deepgram key on the host and gives Brah tokens that last 30
@@ -159,7 +177,7 @@ installed voice for your language. The default macOS voices sound robotic. For a
 download a Premium or Enhanced voice in System Settings > Accessibility > Spoken Content >
 System Voice > Manage Voices.
 
-## Roadmap
+## Next up
 
 1. **More agents.** Claude and OpenClaw, with the same see, talk and point contract.
 2. **App Store build.** Sandboxed: Brah keeps to seeing and pointing, and the agent acts.
@@ -187,6 +205,8 @@ once when the agent asks to act, as a click on Allow would. `BRAH_SNAPSHOT_PATH=
 saves the exact picture the agent gets.
 
 ## Licence
+
+Free for you and your mates. Not free for your company.
 
 [PolyForm Noncommercial 1.0.0](LICENSE.md). You can read, run and change Brah for personal and
 other noncommercial use. You cannot sell it, or use it in or for a business, without a separate
