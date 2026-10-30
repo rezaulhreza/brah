@@ -1,6 +1,7 @@
 import AppKit
 import BrahCore
 import Carbon.HIToolbox
+import Speech
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -118,7 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !CGPreflightScreenCaptureAccess() {
             CGRequestScreenCaptureAccess()
         }
-        Task { _ = await Recorder.allowed() }
+        Task {
+            let microphone = await Recorder.allowed()
+            let speech = SFSpeechRecognizer.authorizationStatus()
+            log("permissions: microphone \(microphone ? "allowed" : "NOT allowed"), speech recognition \(speech == .authorized ? "allowed" : "NOT allowed (\(speech.rawValue))")")
+        }
         buildMenu()
         if handsFreeOn {
             startWake()

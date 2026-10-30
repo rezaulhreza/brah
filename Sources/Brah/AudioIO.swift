@@ -7,8 +7,21 @@ import AVFoundation
 final class AudioIO: @unchecked Sendable {
     static let shared = AudioIO()
 
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
+    private var engine = AVAudioEngine()
+    private var player = AVAudioPlayerNode()
+    /// Pulls the microphone when voice processing is on.
+    private var sink: AVAudioSinkNode?
+    /// Microphone audio reaches the listeners here, off the real-time thread.
+    private let delivery = DispatchQueue(label: "brah.audio.microphone")
+    /// Any sample that is not zero has come from the microphone since voice processing started.
+    /// It has its own lock: the real-time audio thread sets it, and must never wait for `lock`,
+    /// which is held while the engine starts.
+    private let soundLock = NSLock()
+    private var heardSound = false
+    /// Frames from the sink since voice processing started: a stalled sink delivers almost none.
+    private var soundFrames = 0
+    /// Voice processing gave only silence once: do not try it again until Brah restarts.
+    private var restartWithoutEchoCancellation = false
     /// Set when the engine starts: the output node's own format. With voice processing, the
     /// player must feed the output node directly, not the mixer, or the engine does not start.
     private var playFormat = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
@@ -46,7 +59,9 @@ final class AudioIO: @unchecked Sendable {
             stopping = nil
             guard !running else { return }
             do {
-                try startLocked(echoCancellation: true)
+                // BRAH_NO_ECHO_CANCELLATION=1 starts without voice processing, to find audio faults.
+                try startLocked(echoCancellation: !restartWithoutEchoCancellation
+                                && ProcessInfo.processInfo.environment["BRAH_NO_ECHO_CANCELLATION"] == nil)
             } catch {
                 log("audio engine with echo cancellation failed (\(error.localizedDescription)), trying without")
                 do {
@@ -89,8 +104,22 @@ final class AudioIO: @unchecked Sendable {
             converters = [:]
         }
         engine.connect(player, to: engine.outputNode, format: playFormat)
-        input.installTap(onBus: 0, bufferSize: 2048, format: input.outputFormat(forBus: 0)) { [weak self] buffer, _ in
-            self?.deliver(buffer)
+        let inputFormat = input.outputFormat(forBus: 0)
+        if echoCancelled {
+            // With voice processing, newer macOS gives a tap on the input no audio at all. A sink
+            // node pulls it. The sink runs on the real-time audio thread, so it only copies the
+            // cleaned first channel and hands it on.
+            let sink = AVAudioSinkNode { [weak self] _, frames, list in
+                self?.receive(list, frames: frames, sampleRate: inputFormat.sampleRate)
+                return noErr
+            }
+            engine.attach(sink)
+            engine.connect(input, to: sink, format: inputFormat)
+            self.sink = sink
+        } else {
+            input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
+                self?.deliver(buffer)
+            }
         }
         // What the speakers play, as it plays, for the waveform.
         player.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
@@ -105,6 +134,7 @@ final class AudioIO: @unchecked Sendable {
             // Leave nothing behind: a second tap on a node is a crash.
             input.removeTap(onBus: 0)
             player.removeTap(onBus: 0)
+            removeSink()
             engine.stop()
             engine.reset()
             throw error
@@ -112,6 +142,48 @@ final class AudioIO: @unchecked Sendable {
         player.play()
         running = true
         log("audio engine started, echo cancellation \(echoCancelled ? "on" : "off"), microphone \(input.outputFormat(forBus: 0))")
+        if echoCancelled {
+            soundLock.withLock {
+                heardSound = false
+                soundFrames = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.checkEchoCancellation() }
+        }
+    }
+
+    /// Some macOS versions start voice processing but give only silence. A room is never at
+    /// digital zero, so no sound at all means the microphone is cut off: start again without
+    /// echo cancellation. The echo check by words still keeps Brah from answering itself.
+    private func checkEchoCancellation() {
+        // Half a second of sound in the first 1.5 seconds, and some of it above the floor.
+        let (heard, frames) = soundLock.withLock { (heardSound, soundFrames) }
+        let enough = heard && Double(frames) > engine.inputNode.outputFormat(forBus: 0).sampleRate * 0.5
+        let silent = lock.withLock { running && echoCancelled && !enough }
+        guard silent else { return }
+        log("echo cancellation gives no sound on this Mac (\(frames) frames, loud: \(heard)); using the microphone without it")
+        lock.withLock {
+            restartWithoutEchoCancellation = true
+            running = false
+        }
+        engine.inputNode.removeTap(onBus: 0)
+        player.removeTap(onBus: 0)
+        player.stop()
+        engine.stop()
+        removeSink()
+        try? engine.inputNode.setVoiceProcessingEnabled(false)
+        // An engine that had voice processing stays broken after it is switched off: start
+        // again with a new one.
+        lock.withLock {
+            engine = AVAudioEngine()
+            player = AVAudioPlayerNode()
+            engine.attach(player)
+            converters = [:]
+        }
+        do {
+            try lock.withLock { try startLocked(echoCancellation: false) }
+        } catch {
+            log("the microphone did not start again: \(error.localizedDescription)")
+        }
     }
 
     private func stopIfUnused() {
@@ -127,11 +199,54 @@ final class AudioIO: @unchecked Sendable {
         player.removeTap(onBus: 0)
         player.stop()
         engine.stop()
+        removeSink()
         try? engine.inputNode.setVoiceProcessingEnabled(false)
         lock.withLock { queued = 0 }
     }
 
+    private func removeSink() {
+        guard let sink else { return }
+        engine.disconnectNodeInput(sink)
+        engine.detach(sink)
+        self.sink = nil
+    }
+
     // MARK: Microphone
+
+    /// From the sink, on the real-time audio thread: copy the first channel, the cleaned voice,
+    /// and hand it to the listeners on their own queue.
+    private func receive(_ list: UnsafePointer<AudioBufferList>, frames: AVAudioFrameCount, sampleRate: Double) {
+        let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: list))
+        guard frames > 0, let first = buffers.first?.mData?.assumingMemoryBound(to: Float.self),
+              let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false),
+              let buffer = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: frames),
+              let target = buffer.floatChannelData?[0]
+        else { return }
+        buffer.frameLength = frames
+        target.update(from: first, count: Int(frames))
+        // Louder than -100 dB: real sound, not the floor of a cut-off input.
+        let loud = (0..<Int(frames)).contains { abs(first[$0]) > 1e-5 }
+        soundLock.withLock {
+            soundFrames += Int(frames)
+            if loud { heardSound = true }
+        }
+        if debugChannels {
+            let levels = buffers.map { channel -> Float in
+                guard let data = channel.mData?.assumingMemoryBound(to: Float.self) else { return -140 }
+                var sum: Float = 0
+                for index in 0..<Int(frames) { sum += data[index] * data[index] }
+                return 20 * log10(max((sum / Float(frames)).squareRoot(), 1e-7))
+            }
+            delivery.async { [weak self] in self?.logChannels(levels) }
+        }
+        delivery.async { [weak self] in self?.deliver(buffer) }
+    }
+
+    private func logChannels(_ levels: [Float]) {
+        guard Date().timeIntervalSince(lastDebug) > 2 else { return }
+        lastDebug = Date()
+        log("microphone channels (dB): \(levels.map { String(format: "%.0f", $0) }.joined(separator: " "))")
+    }
 
     /// Every microphone buffer, on the audio thread, until `unlisten`.
     func listen(_ handler: @escaping (AVAudioPCMBuffer) -> Void) -> UUID {
@@ -144,7 +259,21 @@ final class AudioIO: @unchecked Sendable {
         lock.withLock { listeners[id] = nil }
     }
 
+    /// BRAH_AUDIO_DEBUG=1 logs the loudness of every microphone channel every two seconds.
+    private let debugChannels = ProcessInfo.processInfo.environment["BRAH_AUDIO_DEBUG"] != nil
+    private var lastDebug = Date.distantPast
+
     private func deliver(_ input: AVAudioPCMBuffer) {
+        if debugChannels, sink == nil, Date().timeIntervalSince(lastDebug) > 2, let data = input.floatChannelData {
+            lastDebug = Date()
+            let levels = (0..<Int(input.format.channelCount)).map { channel -> String in
+                var sum: Float = 0
+                for index in 0..<Int(input.frameLength) { sum += data[channel][index] * data[channel][index] }
+                let rms = (sum / Float(max(1, input.frameLength))).squareRoot()
+                return String(format: "%.0f", 20 * log10(max(rms, 1e-7)))
+            }
+            log("microphone channels (dB): \(levels.joined(separator: " "))")
+        }
         let buffer = Self.firstChannel(input)
         let level = Self.level(buffer)
         let handlers = lock.withLock { () -> [(AVAudioPCMBuffer) -> Void] in
