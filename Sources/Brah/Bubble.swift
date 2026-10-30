@@ -284,6 +284,10 @@ final class Bubble {
         panel.orderOut(nil)
     }
 
+    func bringToFront() {
+        panel.orderFrontRegardless()
+    }
+
     private func place() {
         placing = true
         defer { placing = false }

@@ -171,8 +171,19 @@ final class AudioIO: @unchecked Sendable {
 
     /// The latest loudness of the microphone or the speakers, oldest first, each 0...1.
     func levels(input: Bool) -> [Float] {
-        lock.withLock { running ? (input ? inputLevels : outputLevels) : [Float](repeating: 0, count: Self.levelCount) }
+        if demoLevels {
+            // A voice-like wave for screenshots, with no microphone.
+            let time = Date().timeIntervalSinceReferenceDate
+            return (0..<Self.levelCount).map { index in
+                let wave = sin(Double(index) * 0.55 + time * 6) * sin(Double(index) * 0.19 + time * 2.1)
+                return Float(min(1, max(0.05, 0.4 + 0.45 * wave)))
+            }
+        }
+        return lock.withLock { running ? (input ? inputLevels : outputLevels) : [Float](repeating: 0, count: Self.levelCount) }
     }
+
+    /// Demo mode: the waveform moves without sound.
+    var demoLevels = false
 
     private static func level(_ buffer: AVAudioPCMBuffer) -> Float {
         guard let data = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }

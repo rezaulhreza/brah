@@ -16,15 +16,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var model: SettingsModel?
 
+    /// The window's number, for a screenshot of it alone.
+    var windowNumber: Int? { window?.windowNumber }
+
     /// Opens the window with the saved settings, or brings it to the front when it is open.
-    func show() {
+    /// `demo` fills it with made-up values, for screenshots.
+    func show(demo: Bool = false) {
         if let window {
             NSApp.activate()
             window.makeKeyAndOrderFront(nil)
             return
         }
 
-        let model = SettingsModel()
+        let model = demo ? SettingsModel.demo() : SettingsModel()
         model.onClose = { [weak self] saved in self?.close(saved: saved) }
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         hosting.sizingOptions = [.minSize]
@@ -98,7 +102,30 @@ final class SettingsModel: ObservableObject {
         let hermes = json["hermes"] as? [String: Any]
         fileHasKey = (hermes?["key"] as? String)?.isEmpty == false
         fileHasPassword = ((hermes?["voice"] as? [String: Any])?["password"] as? String)?.isEmpty == false
+        isDemo = false
     }
+
+    /// Made-up values for screenshots. A demo never reads or writes the real settings.
+    private init(demo settings: EditableSettings, secrets: [String: String]) {
+        self.settings = settings
+        self.secrets = secrets
+        savedSecrets = secrets
+        fileHasKey = false
+        fileHasPassword = false
+        isDemo = true
+    }
+
+    static func demo() -> SettingsModel {
+        var settings = EditableSettings(hermesURL: "https://hermes.example.com", voiceURL: "https://hermes.example.com",
+                                        voiceUsername: "ava")
+        settings.handsFree = HandsFreeSettings(enabled: true, idleSeconds: 20)
+        return SettingsModel(demo: settings, secrets: [
+            Secrets.hermesKey: "demo-key-0000000000", Secrets.voicePassword: "demo-password",
+            Secrets.accessClientID: "", Secrets.accessClientSecret: "",
+        ])
+    }
+
+    private let isDemo: Bool
 
     // MARK: Key recorder
 
@@ -161,6 +188,10 @@ final class SettingsModel: ObservableObject {
 
     func save() {
         stopRecording()
+        guard !isDemo else {
+            onClose(false)
+            return
+        }
         for (text, label) in [(settings.hermesURL, "Hermes address"), (settings.voiceURL, "dashboard address")] {
             let text = text.trimmingCharacters(in: .whitespaces)
             guard !text.isEmpty else { continue }

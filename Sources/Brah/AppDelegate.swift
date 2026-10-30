@@ -8,8 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let tapSeconds = 0.35
 
     private var statusItem: NSStatusItem?
-    private lazy var bubble = Bubble(onEscape: { [weak self] in self?.escape() })
-    private let pointer = Pointer()
+    lazy var bubble = Bubble(onEscape: { [weak self] in self?.escape() })
+    let pointer = Pointer()
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -49,7 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "speak") }
     }
 
-    private let settingsWindow = SettingsWindow()
+    let settingsWindow = SettingsWindow()
+    /// The fake app behind the bubble in demo mode.
+    var demoStage: NSPanel?
     /// Screen actions only make sense for an agent on this Mac: a Hermes on a server would click
     /// on the server.
     private var agentIsLocal = true
@@ -71,6 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Demo mode only draws: no permission prompts, no Hermes, no hotkeys, no microphone.
+        if let index = CommandLine.arguments.firstIndex(of: "--demo") {
+            runDemo(index + 1 < CommandLine.arguments.count ? CommandLine.arguments[index + 1] : "")
+            return
+        }
         loadAgent()
         settingsWindow.onSave = { [weak self] in self?.reloadSettings() }
         settingsWindow.onOpen = { [weak self] open in
@@ -186,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func log(_ line: String) {
+    func log(_ line: String) {
         FileHandle.standardError.write(Data("brah: \(line)\n".utf8))
     }
 
