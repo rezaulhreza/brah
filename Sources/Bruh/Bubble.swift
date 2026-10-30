@@ -9,13 +9,28 @@ final class BubbleModel: ObservableObject {
         case asking
         case thinking
         case answer(String)
+        /// The agent says what it will do on the screen and waits for a yes.
+        case approval(String)
         case failed(String)
     }
 
     @Published var phase: Phase = .asking
     @Published var question = ""
+    /// What the agent is doing now ("Clicking Save"), while it works.
+    @Published var step: String?
+    /// A hands-free conversation is on: Bruh listens again after each answer.
+    @Published var handsFree = false
+    @Published var muted = false
     var agentName = "Hermes"
     var onSubmit: (String) -> Void = { _ in }
+    var onStop: () -> Void = {}
+    var onMute: () -> Void = {}
+    /// Start or end a hands-free conversation.
+    var onListen: () -> Void = {}
+    var onClose: () -> Void = {}
+    var onApprove: (Bool) -> Void = { _ in }
+
+    var isBusy: Bool { [.listening, .transcribing, .thinking].contains(phase) }
 }
 
 struct BubbleView: View {
@@ -23,38 +38,9 @@ struct BubbleView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            switch model.phase {
-            case .listening:
-                HStack(spacing: 8) {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text(model.question.isEmpty ? "Listening" : model.question).fixedSize(horizontal: false, vertical: true)
-                }
-                hint("release to send")
-            case .transcribing:
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(model.question.isEmpty ? "Writing down what you said" : model.question).foregroundStyle(.secondary)
-                }
-            case .asking:
-                TextField("Ask \(model.agentName) about your screen", text: $model.question)
-                    .textFieldStyle(.plain)
-                    .focused($focused)
-                    .onSubmit { model.onSubmit(model.question) }
-                    .onAppear { focused = true }
-            case .thinking:
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(model.question).lineLimit(2).foregroundStyle(.secondary)
-                }
-                hint("esc to stop")
-            case .answer(let text):
-                Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                hint("esc to close")
-            case .failed(let text):
-                Text(text).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                hint("esc to close")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            content
         }
         .font(.system(size: 14))
         .padding(12)
@@ -64,8 +50,151 @@ struct BubbleView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
     }
 
+    /// Bruh's eyes, the sound, and the controls.
+    private var header: some View {
+        HStack(spacing: 8) {
+            BruhMark()
+            if model.phase == .listening || model.handsFree {
+                Waveform(input: model.phase == .listening)
+            } else if case .answer = model.phase, !model.muted {
+                Waveform(input: false)
+            } else {
+                Text(model.agentName).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            control(model.handsFree ? "mic.fill" : "mic.slash", help: model.handsFree ? "Stop listening" : "Keep listening: talk without the hotkey",
+                    tint: model.handsFree ? .red : nil, action: model.onListen)
+            control(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", help: model.muted ? "Unmute the voice" : "Mute the voice", action: model.onMute)
+            if model.isBusy {
+                control("stop.fill", help: "Stop", action: model.onStop)
+            }
+            control("xmark", help: "Close", action: model.onClose)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.phase {
+        case .listening:
+            Text(model.question.isEmpty ? "Listening" : model.question).fixedSize(horizontal: false, vertical: true)
+            hint(model.handsFree ? "say \u{201C}bye\u{201D} to end" : "release to send")
+        case .transcribing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(model.question.isEmpty ? "Writing down what you said" : model.question).foregroundStyle(.secondary)
+            }
+        case .asking:
+            TextField("Ask \(model.agentName) about your screen", text: $model.question)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .onSubmit { model.onSubmit(model.question) }
+                .onAppear { focused = true }
+        case .thinking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(model.step ?? model.question).lineLimit(2).foregroundStyle(.secondary)
+            }
+        case .answer(let text):
+            Answer(text: text)
+            if let step = model.step {
+                hint(step)
+            }
+        case .approval(let text):
+            Text(text).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button("Allow") { model.onApprove(true) }.keyboardShortcut(.defaultAction)
+                Button("Not now") { model.onApprove(false) }
+                Spacer()
+                hint(model.handsFree ? "or say yes or no" : "")
+            }
+            .controlSize(.small)
+        case .failed(let text):
+            Text(text).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func control(_ symbol: String, help: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).frame(width: 22, height: 22)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.secondary))
+        .contentShape(Rectangle())
+        .help(help)
+    }
+
     private func hint(_ text: String) -> some View {
         Text(text).font(.system(size: 11)).foregroundStyle(.tertiary)
+    }
+}
+
+/// The agent's answer. A copy button shows while the pointer is over it.
+private struct Answer: View {
+    let text: String
+    @State private var hovering = false
+    @State private var copied = false
+
+    var body: some View {
+        Text(text)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 22)
+            .overlay(alignment: .topTrailing) {
+                if hovering || copied {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(copied ? "Copied" : "Copy the answer")
+                }
+            }
+            .onHover { hovering = $0 }
+    }
+}
+
+/// Bruh's half-shut eyes, from the menu bar icon.
+private struct BruhMark: View {
+    private static let image: NSImage? = {
+        let image = Bundle.main.image(forResource: "MenuIcon")
+        image?.isTemplate = true
+        return image
+    }()
+
+    var body: some View {
+        if let image = Self.image {
+            Image(nsImage: image).resizable().frame(width: 20, height: 20).foregroundStyle(.primary)
+        } else {
+            Image(systemName: "eyes").frame(width: 20, height: 20)
+        }
+    }
+}
+
+/// The loudness of the microphone (while listening) or of the voice (while it speaks).
+private struct Waveform: View {
+    let input: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24)) { _ in
+            let levels = AudioIO.shared.levels(input: input)
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(levels.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(input ? Color.red.opacity(0.8) : Color.accentColor)
+                        .frame(width: 2, height: 3 + CGFloat(levels[index]) * 15)
+                }
+            }
+            .frame(height: 18)
+            .animation(.linear(duration: 0.08), value: levels)
+        }
     }
 }
 

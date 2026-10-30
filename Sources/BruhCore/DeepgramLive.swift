@@ -158,7 +158,7 @@ public final class DeepgramSpeech: SpeechStream, @unchecked Sendable {
     }
 
     private func speak(_ text: String) {
-        let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = Phrases.spoken(text).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
         var start = line.startIndex
         while start < line.endIndex {
@@ -245,10 +245,19 @@ public final class DeepgramListen: WordStream, @unchecked Sendable {
     private var result: String??
     private var waiting: CheckedContinuation<String?, Never>?
     public var onPartial: @Sendable (String) -> Void = { _ in }
+    /// Each turn as Flux reports it, for a hands-free conversation.
+    public var onTurn: @Sendable (TurnEvent) -> Void = { _ in }
 
     public init(socket: URLSessionWebSocketTask) {
         self.socket = socket
         receive()
+    }
+
+    /// Close the socket without waiting for words.
+    public func close() {
+        socket.send(.string(#"{"type": "CloseStream"}"#)) { _ in }
+        socket.cancel(with: .normalClosure, reason: nil)
+        settle()
     }
 
     public func send(_ samples: [Int16]) {
@@ -306,6 +315,12 @@ public final class DeepgramListen: WordStream, @unchecked Sendable {
                 self.lock.withLock { self.heard = true }
                 if json["type"] as? String == "TurnInfo" {
                     let transcript = (json["transcript"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    switch json["event"] as? String {
+                    case "StartOfTurn": self.onTurn(.started)
+                    case "Update": self.onTurn(.update(transcript))
+                    case "EndOfTurn": self.onTurn(.ended(transcript))
+                    default: break
+                    }
                     let partial: String = self.lock.withLock {
                         if json["event"] as? String == "EndOfTurn" {
                             if !transcript.isEmpty { self.done.append(transcript) }

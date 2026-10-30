@@ -1,11 +1,19 @@
 import Foundation
 
+/// What arrives while the agent works: a piece of the answer, or a step it takes (a tool call,
+/// such as "Clicking Save").
+public enum AgentEvent: Equatable, Sendable {
+    case text(String)
+    case step(String)
+}
+
 /// An agent that Bruh can ask about the screen. Hermes is the first; Claude and OpenClaw follow
 /// the same shape. The agent does any clicking itself. Bruh only sees, talks and points.
 public protocol AgentConnection: Sendable {
     var name: String { get }
-    /// `onText` gets each piece of the answer as it arrives, so speech can start before the end.
-    func ask(_ question: String, snapshot: Snapshot, onText: @escaping @Sendable (String) -> Void) async throws -> Reply
+    /// `onEvent` gets each piece of the answer and each step as it arrives, so speech can start
+    /// before the end and the user sees what the agent does.
+    func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply
     /// Forget the conversation, so the next question starts a new one.
     func reset() async
 }
@@ -35,7 +43,11 @@ public enum Brief {
         Answer in at most three short sentences. Your words are spoken aloud: no markdown, no lists, \
         no code blocks. If showing a place on the screen helps, end with one line exactly like \
         POINT 412 230 Save button
-        with x and y in screenshot pixels. Do not click or type on the computer unless the user asks.
+        with x and y in screenshot pixels.
+
+        You can work on the screen with computer_use, but only when the user asks you to do         something on it. Before your first screen action in a request, say in one short sentence         what you will do, end your answer with a line that is exactly
+        ASK
+        and stop. The screen stays locked until the user says yes; then do the work and say in         one short sentence what you did.
         """
     }
 }

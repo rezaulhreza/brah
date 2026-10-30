@@ -4,7 +4,43 @@ import Foundation
 public enum ChatStream {
     public enum Line: Equatable {
         case text(String)
+        /// A tool the agent started, as a short label ("Clicking Save").
+        case step(String)
         case done
+    }
+
+    /// Reads a stream line by line. Hermes sends tool steps as a named event,
+    /// `event: hermes.tool.progress`, before their `data:` line; other named events are skipped.
+    public struct Parser {
+        private var event: String?
+
+        public init() {}
+
+        public mutating func feed(_ line: String) -> Line? {
+            if line.hasPrefix("event:") {
+                event = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                return nil
+            }
+            guard line.hasPrefix("data:") else {
+                if line.isEmpty { event = nil }
+                return nil
+            }
+            // Each named event has one data line here, and some readers drop the blank line after it.
+            defer { event = nil }
+            switch event {
+            case nil, "message":
+                return ChatStream.parse(line)
+            case "hermes.tool.progress":
+                let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                guard let json = try? JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any],
+                      json["status"] as? String == "running"
+                else { return nil }
+                let label = (json["label"] as? String ?? json["tool"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return label.isEmpty ? nil : .step(label)
+            default:
+                return nil
+            }
+        }
     }
 
     public static func parse(_ line: String) -> Line? {
@@ -69,9 +105,14 @@ public struct SpokenText {
         if atLineStart {
             let match = Self.match(line)
             if ended {
-                let out = match == .yes ? "" : line
+                let isAsk = line.trimmingCharacters(in: .whitespaces).uppercased() == "ASK"
+                let out = match == .yes || isAsk ? "" : line
                 line = ""
                 return out
+            }
+            // "ASK" alone on a line is for Bruh, not for the voice: hold it until the line ends.
+            if "ASK".hasPrefix(line.trimmingCharacters(in: .whitespaces).uppercased()) {
+                return ""
             }
             if match != .no {
                 return ""

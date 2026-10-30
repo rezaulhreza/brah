@@ -65,7 +65,7 @@ public actor HermesConnection: AgentConnection {
         sessionID = nil
     }
 
-    public func ask(_ question: String, snapshot: Snapshot, onText: @escaping @Sendable (String) -> Void) async throws -> Reply {
+    public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, settings: settings, sessionID: sessionID)
         let (bytes, response) = try await session.bytes(for: request)
         let http = response as? HTTPURLResponse
@@ -82,14 +82,15 @@ public actor HermesConnection: AgentConnection {
         }
 
         var text = ""
+        var parser = ChatStream.Parser()
         for try await line in bytes.lines {
-            switch ChatStream.parse(line) {
+            switch parser.feed(line) {
             case .text(let piece):
                 text += piece
-                onText(piece)
-            case .done:
-                break
-            case nil:
+                onEvent(.text(piece))
+            case .step(let label):
+                onEvent(.step(label))
+            case .done, nil:
                 continue
             }
         }

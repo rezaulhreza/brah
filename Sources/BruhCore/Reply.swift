@@ -17,28 +17,34 @@ public struct Spot: Equatable, Sendable {
 public struct Reply: Equatable, Sendable {
     public var text: String
     public var point: Spot?
+    /// The agent wants to act on the screen and waits for the user's yes.
+    public var needsApproval: Bool
 
-    public init(text: String, point: Spot?) {
+    public init(text: String, point: Spot?, needsApproval: Bool = false) {
         self.text = text
         self.point = point
+        self.needsApproval = needsApproval
     }
 
     /// The agent ends its answer with `POINT x y label` when it wants to point. The last such line
     /// wins, and every such line is removed from the text.
     public static func parse(_ raw: String) -> Reply {
         var point: Spot?
+        var asks = false
         var kept: [Substring] = []
 
         for line in raw.split(separator: "\n", omittingEmptySubsequences: false) {
             if let found = pointLine(line) {
                 point = found
+            } else if line.trimmingCharacters(in: .whitespaces).uppercased() == "ASK" {
+                asks = true
             } else {
                 kept.append(line)
             }
         }
 
         let text = kept.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return Reply(text: text, point: point)
+        return Reply(text: text, point: point, needsApproval: asks)
     }
 
     private static func pointLine(_ line: Substring) -> Spot? {

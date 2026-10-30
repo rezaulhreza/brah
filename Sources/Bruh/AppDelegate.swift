@@ -13,32 +13,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
-    /// The screen as the user saw it when they pressed the hotkey. The question waits for it.
+    /// The Hermes dashboard: the voice, its plugins and the screen lock.
+    private var dashboard: HermesVoice?
+    /// The screen as the user saw it when they asked. The question waits for it.
     private var capture: Task<Snapshot, Error>?
     private var pressedAt: Date?
     /// Opens the live words socket while the user talks. Nil result: no live route.
     private var listening: Task<WordStream?, Never>?
+    /// The agent's work on the current question. Nil when the agent is idle.
     private var work: Task<Void, Never>?
-    /// The answer as far as it has arrived, without POINT lines.
+    private var workID = UUID()
+    /// The answer as far as it has arrived, without POINT and ASK lines.
     private var shown = ""
     private var shownFilter = SpokenText()
     private var shortcuts = Shortcuts.defaults
     private var voiceReady: Task<Void, Never>?
+
+    // Acting on the screen
+    private var canHoldScreen = false
+    private var holdingScreen = false
+    private var awaitingApproval = false
+
+    // Hands-free
+    private let wake = WakeListener()
+    private var conversation: Conversation?
+    private var idleSeconds: TimeInterval = 20
+
+    // Menu
     private var speakItem: NSMenuItem?
     private var voiceItem: NSMenuItem?
+    private var handsFreeItem: NSMenuItem?
 
     private var speaks: Bool {
         get { UserDefaults.standard.object(forKey: "speak") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "speak") }
     }
 
+    private var handsFreeOn: Bool {
+        get { UserDefaults.standard.bool(forKey: "handsFree") }
+        set { UserDefaults.standard.set(newValue, forKey: "handsFree") }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         agent = HermesSettings.load().map { HermesConnection(settings: $0) }
         voice.log = { [weak self] line in self?.log(line) }
+        AudioIO.shared.log = { [weak self] line in DispatchQueue.main.async { self?.log(line) } }
         connectVoice()
         log("agent: \(agent?.name ?? "none")")
-        bubble.model.agentName = agent?.name ?? "Hermes"
-        bubble.model.onSubmit = { [weak self] question in self?.submit(question) }
+
+        let model = bubble.model
+        model.agentName = agent?.name ?? "Hermes"
+        model.muted = !speaks
+        model.onSubmit = { [weak self] question in self?.submit(question) }
+        model.onStop = { [weak self] in self?.stop() }
+        model.onMute = { [weak self] in self?.toggleMute() }
+        model.onClose = { [weak self] in self?.hide() }
+        model.onListen = { [weak self] in
+            guard let self else { return }
+            if self.conversation != nil {
+                self.endConversation()
+                self.bubble.model.phase = .answer("Stopped listening.")
+            } else {
+                self.beginConversation(keepBubble: true)
+            }
+        }
+        model.onApprove = { [weak self] yes in yes ? self?.approve() : self?.deny() }
 
         let problems: [String]
         (shortcuts, problems) = Shortcuts.load()
@@ -53,7 +92,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Task { _ = await Recorder.allowed() }
         buildMenu()
+        if handsFreeOn {
+            startWake()
+        }
         runTestArguments()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Never leave the agent's screen tools locked after Bruh quits.
+        guard holdingScreen, let dashboard else { return }
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            try? await dashboard.holdScreen(false)
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 1.5)
     }
 
     /// Use the Hermes voice when the backend lets Bruh in. Until then, and when it does not, the
@@ -63,13 +116,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voiceReady = Task {
             do {
                 try await hermes.connect()
+                dashboard = hermes
                 voice = Voice(hermes: hermes, deepgram: await hermes.deepgramLive())
+                canHoldScreen = await hermes.canHoldScreen()
             } catch {
                 log("Hermes voice not available: \(error.localizedDescription)")
             }
             voice.log = { [weak self] line in self?.log(line) }
             voiceItem?.title = "Voice: \(voice.route)"
-            log("voice: \(voice.route)")
+            log("voice: \(voice.route), screen lock: \(canHoldScreen ? "yes" : "no")")
         }
     }
 
@@ -82,11 +137,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Capture the screen at once, so the agent sees it as the user saw it, and start listening.
     /// A press while Bruh is open closes it.
     private func pressed() {
-        if bubble.isVisible && pressedAt == nil {
+        if bubble.isVisible && pressedAt == nil && conversation == nil {
             hide()
             return
         }
 
+        endConversation()
         stop()
         pointer.hide()
         pressedAt = Date()
@@ -123,28 +179,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble.model.phase = .transcribing
         let listening = listening
         self.listening = nil
-        work = Task {
+        Task {
             do {
                 let live = await listening?.value
                 let words = try await voice.words(live: live, wav: recording.wav)
-                guard !Task.isCancelled else { return }
+                guard bubble.model.phase == .transcribing else { return }
                 log("heard \(String(format: "%.1f", recording.seconds)) s: \(words.debugDescription)")
                 guard !words.isEmpty else {
                     bubble.model.phase = .failed("I did not hear any words. Hold \(shortcuts.talk.display) while you talk.")
                     return
                 }
                 bubble.model.question = words
-                submit(words)
+                if awaitingApproval, let yes = Phrases.approval(words) {
+                    yes ? approve() : deny()
+                } else {
+                    submit(words)
+                }
             } catch {
-                guard !Task.isCancelled else { return }
                 bubble.model.phase = .failed(error.localizedDescription)
             }
         }
     }
 
-    // MARK: Actions
+    // MARK: Asking
 
-    private func submit(_ question: String) {
+    /// Send a question with the latest capture. While the agent works on a request the user has
+    /// not approved, its screen tools are locked; `approved` unlocks them for this request.
+    private func submit(_ question: String, approved: Bool = false) {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, let capture else { return }
         guard let agent else {
@@ -152,21 +213,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        work?.cancel()
+        voice.stop()
+        awaitingApproval = false
         bubble.model.phase = .thinking
+        bubble.model.step = nil
         shown = ""
         shownFilter = SpokenText()
         if speaks {
             voice.beginReply()
         }
+        let id = UUID()
+        workID = id
         work = Task {
+            defer { if workID == id { work = nil } }
+            await lockScreen(!approved)
             do {
                 let snapshot = try await capture.value
-                let reply = try await agent.ask(question, snapshot: snapshot) { [weak self] piece in
-                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.arrived(piece) } }
+                let reply = try await agent.ask(question, snapshot: snapshot) { [weak self] event in
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.arrived(event, for: id) } }
                 }
-                guard !Task.isCancelled else { return }
-                log("reply=\(reply.text.debugDescription) point=\(String(describing: reply.point))")
-                bubble.model.phase = .answer(reply.text)
+                guard !Task.isCancelled, workID == id else { return }
+                log("reply=\(reply.text.debugDescription) point=\(String(describing: reply.point)) ask=\(reply.needsApproval)")
+                if reply.needsApproval {
+                    awaitingApproval = true
+                    bubble.model.phase = .approval(reply.text)
+                } else {
+                    bubble.model.phase = .answer(reply.text)
+                    await lockScreen(false)
+                }
                 if speaks {
                     voice.endReply(reply.text)
                 }
@@ -174,25 +249,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     pointer.show(at: snapshot.viewPoint(spot), label: spot.label, on: snapshot.screenFrame)
                 }
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, workID == id else { return }
                 log("ask failed: \(error.localizedDescription)")
                 bubble.model.phase = .failed(error.localizedDescription)
+                await lockScreen(false)
             }
         }
     }
 
-    /// A piece of the answer: show it, and say it while the rest arrives.
-    private func arrived(_ piece: String) {
+    /// A piece of the answer, or a step the agent takes.
+    private func arrived(_ event: AgentEvent, for id: UUID) {
         // A stopped answer stays stopped, even when pieces were still on their way.
-        guard work != nil, bubble.model.phase == .thinking || !shown.isEmpty else { return }
-        shown += shownFilter.feed(piece)
-        if !shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            bubble.model.phase = .answer(shown)
-        }
-        if speaks {
-            voice.replyPiece(piece)
+        guard workID == id, work != nil else { return }
+        switch event {
+        case .step(let label):
+            log("step: \(label)")
+            bubble.model.step = label
+        case .text(let piece):
+            guard bubble.model.phase == .thinking || !shown.isEmpty else { return }
+            shown += shownFilter.feed(piece)
+            if !shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                bubble.model.phase = .answer(shown)
+            }
+            if speaks {
+                voice.replyPiece(piece)
+            }
         }
     }
+
+    // MARK: Acting on the screen
+
+    /// Lock or unlock the agent's screen tools through the screen-remote plugin, when the host
+    /// has it. Without it, the agent's own promise to ask first is the only gate.
+    private func lockScreen(_ locked: Bool) async {
+        guard canHoldScreen, let dashboard, locked != holdingScreen else { return }
+        do {
+            try await dashboard.holdScreen(locked, reason: "Bruh: the user has not said yes to screen actions yet")
+            holdingScreen = locked
+        } catch {
+            log("screen lock failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func approve() {
+        guard awaitingApproval else { return }
+        log("approved")
+        capture = Task { try await Capture.snapshot() }
+        bubble.model.question = "Yes, go ahead."
+        submit("Yes, go ahead.", approved: true)
+    }
+
+    private func deny() {
+        guard awaitingApproval else { return }
+        log("not approved")
+        awaitingApproval = false
+        bubble.model.phase = .answer("OK, I will leave the screen alone.")
+        Task { await lockScreen(false) }
+        capture = Task { try await Capture.snapshot() }
+        submit("No, do not do that.")
+    }
+
+    // MARK: Stop, hide
 
     private func cancelListening() {
         let listening = listening
@@ -200,44 +317,215 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await listening?.value?.cancel() }
     }
 
-    /// Stop listening, stop waiting for the agent and stop talking. The bubble stays, so the user
-    /// sees that it stopped.
+    /// Stop listening, stop the agent and stop talking. The bubble stays, so the user sees that
+    /// it stopped. A hands-free conversation goes on listening.
     func stop() {
         if pressedAt != nil {
             pressedAt = nil
             _ = recorder.stop()
         }
         cancelListening()
+        let wasWorking = work != nil
         work?.cancel()
         work = nil
+        workID = UUID()
         voice.stop()
-        if [.listening, .transcribing, .thinking].contains(bubble.model.phase) {
-            bubble.model.phase = .failed("Stopped.")
+        awaitingApproval = false
+        if bubble.model.isBusy {
+            bubble.model.phase = conversation == nil ? .failed("Stopped.") : .listening
+        }
+        guard wasWorking || holdingScreen else { return }
+        // Take the screen back at once; the agent stops when its stream closes.
+        Task {
+            await lockScreen(true)
+            try? await Task.sleep(for: .seconds(3))
+            if work == nil && !awaitingApproval {
+                await lockScreen(false)
+            }
         }
     }
 
-    /// Stop, and take every Bruh window off the screen.
+    /// Stop, end a conversation, and take every Bruh window off the screen.
     func hide() {
+        endConversation()
         stop()
         bubble.hide()
         pointer.hide()
     }
 
     private func escape() {
-        if [.listening, .transcribing, .thinking].contains(bubble.model.phase) {
+        if conversation != nil {
+            hide()
+        } else if bubble.model.isBusy {
             stop()
         } else {
             hide()
         }
     }
 
+    // MARK: Hands-free
+
+    private func setHandsFree(_ on: Bool) {
+        handsFreeOn = on
+        handsFreeItem?.state = on ? .on : .off
+        if on {
+            startWake()
+        } else {
+            endConversation()
+            wake.stop()
+        }
+        log(on ? "hands-free on" : "hands-free off")
+    }
+
+    private func startWake() {
+        guard handsFreeOn, conversation == nil else { return }
+        Task {
+            if let problem = await wake.start(onWake: { [weak self] in self?.woke() }) {
+                log("wake word: \(problem)")
+                bubble.show(near: NSEvent.mouseLocation, phase: .failed(problem), typing: false)
+                setHandsFree(false)
+            } else {
+                log("listening for \"Hey Bruh\"")
+            }
+        }
+    }
+
+    private func woke() {
+        guard conversation == nil, pressedAt == nil else { return }
+        log("wake word heard")
+        NSSound(named: "Tink")?.play()
+        beginConversation()
+    }
+
+    /// The microphone stays open: each finished turn is a question, until "bye" or silence.
+    private func beginConversation(keepBubble: Bool = false) {
+        wake.stop()
+        stop()
+        pointer.hide()
+        let session = Conversation()
+        conversation = session
+        capture = Task { try await Capture.snapshot() }
+        if keepBubble && bubble.isVisible {
+            bubble.model.phase = .listening
+            bubble.model.question = ""
+        } else {
+            bubble.show(near: NSEvent.mouseLocation, phase: .listening, typing: false)
+        }
+        bubble.model.handsFree = true
+
+        Task {
+            let turns: LiveTurns?
+            if let flux = await voice.turns(onTurn: { [weak self] event in self?.turn(event) }) {
+                turns = FluxTurns(flux)
+            } else if case .success(let recognizer) = await SpeechAccess.onDeviceRecognizer() {
+                turns = MacTurns(recognizer: recognizer) { [weak self] event in self?.turn(event) }
+            } else {
+                turns = nil
+            }
+            guard conversation === session else {
+                turns?.close()
+                return
+            }
+            guard let turns else {
+                bubble.model.phase = .failed("Bruh has no way to listen for a conversation here.")
+                endConversation()
+                return
+            }
+            do {
+                try session.attach(turns)
+                log("conversation started (\(turns is FluxTurns ? "Flux" : "on-device"))")
+            } catch {
+                bubble.model.phase = .failed("The microphone did not start: \(error.localizedDescription)")
+                endConversation()
+            }
+        }
+        session.lastActivity = Date()
+        session.timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+    }
+
+    private func turn(_ event: TurnEvent) {
+        guard let session = conversation else { return }
+        switch event {
+        case .started:
+            break
+        case .update(let words):
+            guard !words.isEmpty else { return }
+            if voice.isSpeaking {
+                // Talking over the voice stops it, unless the words are the voice itself.
+                guard !voice.isEcho(words) else { return }
+                log("barge-in")
+                voice.stop()
+            }
+            session.lastActivity = Date()
+            if work == nil && !awaitingApproval {
+                bubble.model.phase = .listening
+            }
+            if bubble.model.phase == .listening {
+                bubble.model.question = words
+            }
+        case .ended(let words):
+            let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !words.isEmpty else { return }
+            if voice.isEcho(words) {
+                log("echo ignored: \(words.debugDescription)")
+                return
+            }
+            session.lastActivity = Date()
+            log("turn: \(words.debugDescription)")
+            if Phrases.isStop(words) {
+                endConversation(sayBye: true)
+                return
+            }
+            if awaitingApproval, let yes = Phrases.approval(words) {
+                yes ? approve() : deny()
+                return
+            }
+            capture = Task { try await Capture.snapshot() }
+            bubble.model.question = words
+            submit(words)
+        }
+    }
+
+    /// The idle clock runs only while nobody talks: not while the agent works or the voice speaks.
+    private func tick() {
+        guard let session = conversation else { return }
+        if work != nil || voice.isSpeaking || awaitingApproval {
+            session.lastActivity = Date()
+        } else if Date().timeIntervalSince(session.lastActivity) > idleSeconds {
+            log("conversation idle")
+            endConversation()
+        }
+    }
+
+    private func endConversation(sayBye: Bool = false) {
+        guard let session = conversation else { return }
+        conversation = nil
+        session.close()
+        bubble.model.handsFree = false
+        log("conversation ended")
+        if sayBye {
+            stop()
+            if speaks { voice.say("Bye.") }
+        }
+        if bubble.model.phase == .listening || sayBye {
+            bubble.hide()
+        }
+        // Give the microphone a moment before the wake word listens again.
+        Task {
+            try? await Task.sleep(for: .seconds(sayBye ? 1.5 : 0.5))
+            startWake()
+        }
+    }
+
     // MARK: Tests
 
     /// `--ask "question"` asks without the hotkey. `--talk 4` listens for four seconds, as a hold
-    /// of the hotkey would. Both are for tests and scripts.
+    /// of the hotkey would. `--converse` starts a hands-free conversation as "Hey Bruh" would.
     private func runTestArguments() {
         let arguments = CommandLine.arguments
-        guard arguments.contains("--ask") || arguments.contains("--talk") else { return }
+        guard arguments.contains("--ask") || arguments.contains("--talk") || arguments.contains("--converse") else { return }
         Task {
             await voiceReady?.value
             runTest(arguments)
@@ -259,6 +547,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? await Task.sleep(for: .seconds(seconds))
                 released()
             }
+        } else if arguments.contains("--converse") {
+            beginConversation()
         }
     }
 
@@ -278,6 +568,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(entry("Stop", shortcut: shortcuts.stop, action: #selector(menuStop)))
         menu.addItem(entry("Hide", shortcut: shortcuts.hide, action: #selector(menuHide)))
         menu.addItem(.separator())
+        let handsFree = entry("Listen for \u{201C}Hey Bruh\u{201D}", shortcut: nil, action: #selector(toggleHandsFree))
+        handsFree.state = handsFreeOn ? .on : .off
+        menu.addItem(handsFree)
+        handsFreeItem = handsFree
         let speak = entry("Speak replies", shortcut: shortcuts.mute, action: #selector(toggleSpeak))
         speak.state = speaks ? .on : .off
         menu.addItem(speak)
@@ -336,6 +630,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuType() {
+        endConversation()
         stop()
         pointer.hide()
         capture = Task { try await Capture.snapshot() }
@@ -344,6 +639,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuStop() { stop() }
     @objc private func menuHide() { hide() }
+
+    @objc private func toggleHandsFree() {
+        setHandsFree(!handsFreeOn)
+    }
 
     @objc private func toggleSpeak(_ sender: NSMenuItem) {
         toggleMute()
@@ -356,6 +655,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             voice.stop()
         }
         speakItem?.state = speaks ? .on : .off
+        bubble.model.muted = !speaks
         log(speaks ? "voice on" : "voice muted")
     }
 

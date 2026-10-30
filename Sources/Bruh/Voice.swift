@@ -2,14 +2,14 @@ import AVFoundation
 import BruhCore
 import Speech
 
-/// Records the microphone as 16 kHz mono, the rate speech providers expect.
+/// Records the microphone as 16 kHz mono, the rate speech providers expect, from the shared
+/// audio engine.
 final class Recorder {
     static let sampleRate = 16_000.0
 
-    private let engine = AVAudioEngine()
     private let lock = NSLock()
     private var samples: [Int16] = []
-    private var running = false
+    private var listener: UUID?
     private var live: (([Int16]) -> Void)?
 
     static func allowed() async -> Bool {
@@ -29,53 +29,28 @@ final class Recorder {
             samples = []
             live = nil
         }
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Self.sampleRate, channels: 1, interleaved: true),
-              let converter = AVAudioConverter(from: format, to: target)
-        else { throw CocoaError(.featureUnsupported) }
-
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            self?.append(buffer, converter: converter, target: target)
+        try AudioIO.shared.acquire()
+        let converter = PCM16Converter(sampleRate: Self.sampleRate)
+        listener = AudioIO.shared.listen { [weak self] buffer in
+            guard let self else { return }
+            let chunk = converter.convert(buffer)
+            self.lock.withLock {
+                self.samples.append(contentsOf: chunk)
+                self.live?(chunk)
+            }
         }
-        engine.prepare()
-        try engine.start()
-        running = true
     }
 
     /// The recording as a WAV file, and the number of seconds in it.
     func stop() -> (wav: Data, seconds: Double) {
         lock.withLock { live = nil }
-        if running {
-            engine.inputNode.removeTap(onBus: 0)
-            engine.stop()
-            running = false
+        if let listener {
+            AudioIO.shared.unlisten(listener)
+            AudioIO.shared.release()
+            self.listener = nil
         }
         let taken = lock.withLock { samples }
         return (WAV.file(samples: taken, sampleRate: Int(Self.sampleRate)), Double(taken.count) / Self.sampleRate)
-    }
-
-    private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter, target: AVAudioFormat) {
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * Self.sampleRate / buffer.format.sampleRate) + 32
-        guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
-
-        var fed = false
-        converter.convert(to: out, error: nil) { _, status in
-            if fed {
-                status.pointee = .noDataNow
-                return nil
-            }
-            fed = true
-            status.pointee = .haveData
-            return buffer
-        }
-
-        guard let channel = out.int16ChannelData?[0] else { return }
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
-        lock.withLock {
-            samples.append(contentsOf: chunk)
-            live?(chunk)
-        }
     }
 }
 
@@ -88,8 +63,11 @@ final class Voice {
     /// The user's own live voice in Hermes, when the host has the `deepgram-live` plugin.
     private let deepgram: DeepgramLiveSettings?
     private let system = AVSpeechSynthesizer()
-    private let pcm = PCMPlayer()
     private var player: AVAudioPlayer?
+    private var sampleRate = Double(DeepgramLiveSettings.outputSampleRate)
+    /// This voice holds the shared audio engine while it plays.
+    private var usingAudio = false
+    private var echo = EchoGuard()
     private var speaking: Task<Void, Never>?
     private var reply: LiveReply?
     var log: (String) -> Void = { _ in }
@@ -97,6 +75,48 @@ final class Voice {
     init(hermes: HermesVoice?, deepgram: DeepgramLiveSettings? = nil) {
         self.hermes = hermes
         self.deepgram = hermes == nil ? nil : deepgram
+        AudioIO.shared.onDrained = { [weak self] in MainActor.assumeIsolated { self?.drained() } }
+    }
+
+    /// Bruh is talking, or about to.
+    var isSpeaking: Bool {
+        AudioIO.shared.isPlaying || system.isSpeaking || player?.isPlaying == true || (reply?.isOpen ?? false)
+    }
+
+    /// The words are Bruh's own voice coming back through the microphone.
+    func isEcho(_ transcript: String) -> Bool {
+        echo.isEcho(transcript)
+    }
+
+    var hasLiveTurns: Bool { deepgram != nil }
+
+    /// Turns of a hands-free conversation, from Flux. Nil without the deepgram-live plugin.
+    func turns(onTurn: @escaping @MainActor (TurnEvent) -> Void) async -> DeepgramListen? {
+        guard let hermes, let deepgram else { return nil }
+        do {
+            let listen = DeepgramListen(socket: try await hermes.deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
+            listen.onTurn = { event in DispatchQueue.main.async { MainActor.assumeIsolated { onTurn(event) } } }
+            return listen
+        } catch {
+            log("live turns not available: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func useAudio() {
+        guard !usingAudio else { return }
+        do {
+            try AudioIO.shared.acquire()
+            usingAudio = true
+        } catch {
+            log("audio engine failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func drained() {
+        guard usingAudio, reply == nil || reply?.isOpen == false else { return }
+        usingAudio = false
+        AudioIO.shared.release()
     }
 
     var route: String {
@@ -178,7 +198,9 @@ final class Voice {
 
     func replyPiece(_ piece: String) {
         guard let reply else { return }
-        reply.feed(reply.filter.feed(piece))
+        let words = reply.filter.feed(piece)
+        echo.spoke(words)
+        reply.feed(words)
     }
 
     /// The answer is complete. `text` is said another way when live speech made no sound.
@@ -188,7 +210,9 @@ final class Voice {
             return
         }
         reply.text = text
-        reply.feed(reply.filter.finish())
+        let rest = reply.filter.finish()
+        echo.spoke(rest)
+        reply.feed(rest)
         reply.finish()
         if reply.failed {
             self.reply = nil
@@ -201,15 +225,18 @@ final class Voice {
         switch event {
         case .start(let rate):
             log("speaking live (\(route)) at \(Int(rate)) Hz")
-            pcm.start(sampleRate: rate)
+            sampleRate = rate
+            useAudio()
         case .pcm(let data):
-            pcm.play(data)
+            useAudio()
+            AudioIO.shared.play(data, sampleRate: sampleRate)
         case .fallback:
             log("live speech made no sound, saying it another way")
             self.reply = nil
             if let text = reply.text { sayWhole(text) }
         case .end:
-            break
+            reply.isOpen = false
+            if !AudioIO.shared.isPlaying { drained() }
         }
     }
 
@@ -232,7 +259,7 @@ final class Voice {
         speaking = Task {
             if let hermes {
                 do {
-                    let sound = try await hermes.speak(text)
+                    let sound = try await hermes.speak(Phrases.spoken(text))
                     guard !Task.isCancelled else { return }
                     let player = try AVAudioPlayer(data: sound.data)
                     if player.play() {
@@ -252,7 +279,8 @@ final class Voice {
     }
 
     private func sayWithMac(_ text: String) {
-        let utterance = AVSpeechUtterance(string: text)
+        echo.spoke(text)
+        let utterance = AVSpeechUtterance(string: Phrases.spoken(text))
         utterance.voice = Self.bestMacVoice
         system.speak(utterance)
     }
@@ -278,8 +306,12 @@ final class Voice {
         speaking = nil
         player?.stop()
         player = nil
-        pcm.stop()
+        AudioIO.shared.stopPlayback()
         system.stopSpeaking(at: .immediate)
+        if usingAudio {
+            usingAudio = false
+            AudioIO.shared.release()
+        }
     }
 }
 
@@ -289,6 +321,8 @@ private final class LiveReply {
     var filter = SpokenText()
     var text: String?
     var failed = false
+    /// More sound may still come.
+    var isOpen = true
     private var speech: SpeechStream?
     private var queue: [String] = []
     private var finished = false
@@ -314,51 +348,6 @@ private final class LiveReply {
         speech?.stop()
         speech = nil
         queue = []
-    }
-}
-
-/// Plays raw 16-bit mono PCM as it arrives.
-@MainActor
-final class PCMPlayer {
-    private let engine = AVAudioEngine()
-    private let node = AVAudioPlayerNode()
-    private var format: AVAudioFormat?
-
-    init() {
-        engine.attach(node)
-    }
-
-    func start(sampleRate: Double) {
-        stop()
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false) else { return }
-        self.format = format
-        engine.connect(node, to: engine.mainMixerNode, format: format)
-        do {
-            try engine.start()
-            node.play()
-        } catch {
-            self.format = nil
-        }
-    }
-
-    func play(_ data: Data) {
-        guard let format else { return }
-        let count = data.count / 2
-        guard count > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count)),
-              let channel = buffer.floatChannelData?[0] else { return }
-        buffer.frameLength = AVAudioFrameCount(count)
-        data.withUnsafeBytes { raw in
-            for index in 0..<count {
-                channel[index] = Float(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self))) / 32_768
-            }
-        }
-        node.scheduleBuffer(buffer)
-    }
-
-    func stop() {
-        node.stop()
-        engine.stop()
-        format = nil
     }
 }
 

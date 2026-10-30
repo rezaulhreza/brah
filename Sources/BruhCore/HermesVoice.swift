@@ -147,6 +147,17 @@ public actor HermesVoice {
         return task
     }
 
+    /// True when the host has the `screen-remote` plugin, which can lock the agent's screen tools.
+    public func canHoldScreen() async -> Bool {
+        (try? await request("api/plugins/screen-remote/status", method: "GET", body: nil)) != nil
+    }
+
+    /// Lock or unlock the agent's screen tools. While locked, every screen tool call is refused
+    /// and the refusal tells the agent why, so it waits.
+    public func holdScreen(_ held: Bool, reason: String = "") async throws {
+        _ = try await post("api/plugins/screen-remote/hold", body: ["held": held, "reason": reason])
+    }
+
     /// Connect once, and again after a 401: the backend may have restarted with a new token.
     private func post(_ path: String, body: [String: Any]) async throws -> [String: Any] {
         try await request(path, method: "POST", body: body)

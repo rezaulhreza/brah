@@ -247,3 +247,72 @@ final class DeepgramLiveTests: XCTestCase {
         XCTAssertTrue(DeepgramSpeech.sentences("Wait.") == ("", "Wait."))
     }
 }
+
+final class AgentEventTests: XCTestCase {
+    func testParserReadsTextAndSteps() {
+        var parser = ChatStream.Parser()
+        XCTAssertNil(parser.feed("event: hermes.tool.progress"))
+        XCTAssertEqual(parser.feed(#"data: {"tool":"computer_use","label":"Clicking Save","status":"running"}"#), .step("Clicking Save"))
+        XCTAssertEqual(parser.feed(#"data: {"choices":[{"delta":{"content":"Done."}}]}"#), .text("Done."))
+        XCTAssertNil(parser.feed("event: hermes.tool.progress"))
+        XCTAssertNil(parser.feed(#"data: {"tool":"computer_use","status":"completed"}"#))
+        XCTAssertNil(parser.feed("event: approval.request"))
+        XCTAssertNil(parser.feed(#"data: {"choices":[{"delta":{"content":"not text"}}]}"#))
+        XCTAssertEqual(parser.feed("data: [DONE]"), .done)
+    }
+
+    func testAskLineAsksForApproval() {
+        let reply = Reply.parse("I will click Save in Pages.\nASK")
+        XCTAssertTrue(reply.needsApproval)
+        XCTAssertEqual(reply.text, "I will click Save in Pages.")
+        XCTAssertFalse(Reply.parse("Ask me anything.").needsApproval)
+    }
+
+    func testAskLineIsNeverSpoken() {
+        var filter = SpokenText()
+        let spoken = ["I will click Save.\n", "AS", "K"].map { filter.feed($0) }.joined() + filter.finish()
+        XCTAssertEqual(spoken, "I will click Save.\n")
+        var other = SpokenText()
+        XCTAssertEqual(["As", "k me."].map { other.feed($0) }.joined() + other.finish(), "Ask me.")
+    }
+}
+
+final class ConversationTests: XCTestCase {
+    func testStopIsTheWholeUtterance() {
+        XCTAssertTrue(Phrases.isStop("Bye!"))
+        XCTAssertTrue(Phrases.isStop("Stop listening."))
+        XCTAssertFalse(Phrases.isStop("How do I stop the build?"))
+    }
+
+    func testApproval() {
+        XCTAssertEqual(Phrases.approval("Yes, go ahead."), true)
+        XCTAssertEqual(Phrases.approval("No, wait"), false)
+        XCTAssertNil(Phrases.approval("Open Safari instead"))
+    }
+
+    func testWakeWordAsRecognitionSpellsIt() {
+        XCTAssertTrue(Phrases.hasWakeWord("Hey Bruh"))
+        XCTAssertTrue(Phrases.hasWakeWord("hey bro what is this"))
+        XCTAssertTrue(Phrases.hasWakeWord("okay, bruh."))
+        XCTAssertFalse(Phrases.hasWakeWord("my brother"))
+        XCTAssertFalse(Phrases.hasWakeWord("hey brother"))
+    }
+
+    func testEchoGuard() {
+        var guardian = EchoGuard()
+        let now = Date()
+        guardian.spoke("The save button is at the top right of the window.", at: now)
+        XCTAssertTrue(guardian.isEcho("the top right of the window", at: now.addingTimeInterval(2)))
+        XCTAssertFalse(guardian.isEcho("open the settings instead", at: now.addingTimeInterval(2)))
+        XCTAssertFalse(guardian.isEcho("the top right of the window", at: now.addingTimeInterval(30)))
+    }
+}
+
+final class PronunciationTests: XCTestCase {
+    func testBruhIsSaidBrah() {
+        XCTAssertEqual(Phrases.spoken("Hello, Bruh here. BRUH!"), "Hello, Brah here. Brah!")
+        XCTAssertEqual(Phrases.spoken("Bruhs and brush stay"), "Bruhs and brush stay")
+        XCTAssertTrue(Phrases.isStop("Bye, brah."))
+        XCTAssertTrue(Phrases.hasWakeWord("hey brah"))
+    }
+}
