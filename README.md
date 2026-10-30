@@ -35,16 +35,22 @@ macOS asks for Screen Recording again after each build.
 | ⌃⌥. | Stop: listening, the agent and the voice |
 | ⌃⌥M | Mute or unmute the voice |
 | ⌃⌥H | Hide everything |
+| ⌃⌥J | Hands-free: listen for "Hey Bruh", or stop |
 | Esc | Stop while it works, close after |
 
 Drag the bubble by its empty space to move it. It stays there until the next question.
 
 ### Change the shortcuts
 
-Set any of them in `~/.config/bruh/config.json`, then reopen Bruh:
+Open **Settings** from the Bruh menu. Under Shortcuts, click the shortcut of an action, then
+press the new keys. Esc cancels. Bruh does not accept a key that another action uses, and says
+so under the action. Click **Save** to use the new shortcuts.
+
+The Settings window writes `~/.config/bruh/config.json`. You can also set the shortcuts in that
+file yourself, then reopen Bruh:
 
 ```json
-{"shortcuts": {"talk": "cmd+shift+space", "stop": "ctrl+option+.", "mute": "ctrl+option+m", "hide": "ctrl+option+h"}}
+{"shortcuts": {"talk": "cmd+shift+space", "stop": "ctrl+option+.", "mute": "ctrl+option+m", "hide": "ctrl+option+h", "handsFree": "ctrl+option+j"}}
 ```
 
 Modifiers: `ctrl`, `option` (or `alt`), `shift`, `cmd`. Keys: letters, digits, `space`, `return`,
@@ -54,12 +60,28 @@ and Bruh says why in its log. The menu shows the shortcuts in use.
 
 ## Connect Hermes
 
-Bruh calls the Hermes API server (`/v1/chat/completions`) and streams the answer. It finds the
-key in this order:
+Bruh calls the Hermes API server (`/v1/chat/completions`) and streams the answer. Hermes can
+run on this Mac or on a server, for example a VPS behind a Cloudflare tunnel, or a computer on
+your Tailscale network. Both `http://` and `https://` addresses work.
+
+The easy way is the Settings window: open **Settings** from the Bruh menu and fill in the Hermes
+address and the API key under Agent. With no address, Bruh uses `http://127.0.0.1:8642`. Bruh
+keeps the key in your Keychain, not in a file.
+
+Bruh finds the key in this order:
 
 1. `BRUH_HERMES_URL` and `BRUH_HERMES_KEY` in the environment.
-2. `~/.config/bruh/config.json`: `{"hermes": {"url": "http://127.0.0.1:8642", "key": "..."}}`
-3. `API_SERVER_KEY` in `~/.hermes/.env`, with the URL `http://127.0.0.1:8642`.
+2. The Keychain, where the Settings window saves the key.
+3. `~/.config/bruh/config.json`: `{"hermes": {"url": "http://127.0.0.1:8642", "key": "..."}}`
+4. `API_SERVER_KEY` in `~/.hermes/.env`, with the URL `http://127.0.0.1:8642`.
+
+### Cloudflare Access
+
+When Hermes is behind Cloudflare Access, make a service token in Cloudflare Zero Trust. Put its
+client ID and client secret in Settings under Cloudflare Access. Bruh sends them as the
+`CF-Access-Client-Id` and `CF-Access-Client-Secret` headers to the Hermes address and to the
+dashboard. Bruh keeps both in the Keychain. The environment can set
+`BRUH_CF_ACCESS_CLIENT_ID` and `BRUH_CF_ACCESS_CLIENT_SECRET` instead.
 
 ## Voice
 
@@ -81,12 +103,18 @@ default).
 - **A dashboard with a sign-in** (for example one with `dashboard.public_url`): give Bruh the
   same username and password that you use for the dashboard.
 
+Set the dashboard address, the username and the password in Settings under Voice. Bruh keeps
+the password in your Keychain. You can also put the address and the username in
+`~/.config/bruh/config.json`:
+
 ```json
-{"hermes": {"voice": {"url": "http://127.0.0.1:9119", "username": "...", "password": "..."}}}
+{"hermes": {"voice": {"url": "http://127.0.0.1:9119", "username": "..."}}}
 ```
 
+Older setups can keep `"password"` in that file too. Bruh uses the Keychain password first.
 Both routes use this sign-in. The environment can set `BRUH_HERMES_VOICE_URL`,
-`BRUH_HERMES_USERNAME` and `BRUH_HERMES_PASSWORD` instead. The menu shows which voice Bruh uses.
+`BRUH_HERMES_USERNAME` and `BRUH_HERMES_PASSWORD` instead, and these win over the Settings
+window. The menu shows which voice Bruh uses.
 
 When Bruh cannot reach the Hermes voice, it uses the speech engines of macOS, with the best
 installed voice for your language. The default macOS voices sound robotic. For a better one,

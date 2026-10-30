@@ -316,3 +316,211 @@ final class PronunciationTests: XCTestCase {
         XCTAssertTrue(Phrases.hasWakeWord("hey brah"))
     }
 }
+
+final class ShortcutSettingsTests: XCTestCase {
+    func testHandsFreeSlot() {
+        XCTAssertEqual(Shortcuts.defaults.handsFree.display, "⌃⌥J")
+        XCTAssertEqual(Shortcuts.resolve(["handsFree": "cmd+shift+j"]).0.handsFree.display, "⇧⌘J")
+
+        let (shortcuts, problems) = Shortcuts.resolve(["handsFree": "ctrl+option+space"])
+        XCTAssertEqual(shortcuts, Shortcuts.defaults)
+        XCTAssertTrue(problems.first?.contains("both talk and handsFree") == true)
+
+        let unknown = Shortcuts.resolve(["wake": "ctrl+option+w"]).1
+        XCTAssertEqual(unknown, ["Unknown shortcut name \"wake\". The names are talk, stop, mute, hide and handsFree."])
+    }
+
+    func testConfigTextRoundTripsForEveryKey() {
+        XCTAssertEqual(Shortcuts.defaults.talk.configText, "ctrl+option+space")
+        XCTAssertEqual(Shortcut.parse("cmd+alt+shift+ctrl+escape")?.configText, "ctrl+option+shift+cmd+esc")
+        for (name, _) in Shortcut.keys {
+            for modifiers in ["ctrl", "option+shift", "ctrl+option+shift+cmd"] {
+                let shortcut = Shortcut.parse("\(modifiers)+\(name)")
+                XCTAssertNotNil(shortcut, name)
+                XCTAssertEqual(shortcut.flatMap { Shortcut.parse($0.configText) }, shortcut, name)
+            }
+        }
+        XCTAssertEqual(Shortcut.parse("f12")?.configText, "f12")
+    }
+
+    func testFromKeyCode() {
+        let control = Shortcut.control, option = Shortcut.option
+        XCTAssertEqual(Shortcut.from(keyCode: 49, modifiers: control | option), Shortcut.parse("ctrl+option+space"))
+        XCTAssertEqual(Shortcut.from(keyCode: 96, modifiers: 0), Shortcut.parse("f5"))
+        // Caps Lock (1 << 10) and other bits do not count.
+        XCTAssertEqual(Shortcut.from(keyCode: 46, modifiers: Shortcut.command | 1 << 10), Shortcut.parse("cmd+m"))
+        XCTAssertNil(Shortcut.from(keyCode: 46, modifiers: 0))
+        XCTAssertNil(Shortcut.from(keyCode: 46, modifiers: 1 << 10))
+        XCTAssertNil(Shortcut.from(keyCode: 200, modifiers: control))
+        for key in Shortcut.keyList {
+            XCTAssertEqual(Shortcut.from(keyCode: key.code, modifiers: control), Shortcut.parse("ctrl+\(key.name)"), key.name)
+        }
+    }
+
+    func testShortcutsByName() {
+        var shortcuts = Shortcuts.defaults
+        XCTAssertEqual(Shortcuts.names, ["talk", "stop", "mute", "hide", "handsFree"])
+        XCTAssertEqual(shortcuts["hide"], Shortcuts.defaults.hide)
+        XCTAssertNil(shortcuts["wake"])
+        shortcuts["handsFree"] = Shortcut.parse("f6")
+        XCTAssertEqual(shortcuts.handsFree.display, "F6")
+    }
+}
+
+final class ConfigFileTests: XCTestCase {
+    private func temporaryHome() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    }
+
+    private func writeConfig(_ text: String, home: URL) throws {
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try text.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8)
+    }
+
+    func testReadMissingFileIsEmptyAndBrokenFileThrows() throws {
+        let home = temporaryHome()
+        XCTAssertTrue(try ConfigFile.read(home: home).isEmpty)
+        try writeConfig("{not json", home: home)
+        XCTAssertThrowsError(try ConfigFile.read(home: home)) { XCTAssertEqual($0 as? ConfigFile.Failure, .notJSON) }
+    }
+
+    func testWriteMakesFolderAndPrivateFile() throws {
+        let home = temporaryHome()
+        try ConfigFile.write(["a": 1], home: home)
+        let attributes = try FileManager.default.attributesOfItem(atPath: ConfigFile.url(home: home).path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        XCTAssertEqual(try ConfigFile.read(home: home)["a"] as? Int, 1)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: home.appendingPathComponent(".config/bruh").path)
+        XCTAssertEqual(leftovers, ["config.json"])
+    }
+
+    func testSaveKeepsKeysTheWindowDoesNotManage() throws {
+        let home = temporaryHome()
+        try writeConfig(#"""
+        {"hermes": {"url": "http://old:1", "key": "file-key", "model": "x",
+                    "voice": {"url": "http://v:2", "password": "file-pass"}},
+         "shortcuts": {"talk": "cmd+shift+space", "volume": "ctrl+v"},
+         "other": [1, 2]}
+        """#, home: home)
+
+        var settings = EditableSettings(json: try ConfigFile.read(home: home))
+        XCTAssertEqual(settings.hermesURL, "http://old:1")
+        XCTAssertEqual(settings.voiceURL, "http://v:2")
+        XCTAssertEqual(settings.shortcuts.talk.display, "⇧⌘Space")
+        XCTAssertEqual(settings.handsFree, HandsFreeSettings())
+
+        settings.hermesURL = " http://new:3 "
+        settings.voiceURL = ""
+        settings.voiceUsername = "rez"
+        settings.shortcuts.handsFree = Shortcut.parse("f6")!
+        settings.handsFree = HandsFreeSettings(enabled: true, idleSeconds: 45)
+        try ConfigFile.write(settings.applied(to: try ConfigFile.read(home: home)), home: home)
+
+        let json = try ConfigFile.read(home: home)
+        let hermes = try XCTUnwrap(json["hermes"] as? [String: Any])
+        XCTAssertEqual(hermes["url"] as? String, "http://new:3")
+        XCTAssertEqual(hermes["key"] as? String, "file-key")
+        XCTAssertEqual(hermes["model"] as? String, "x")
+        let voice = try XCTUnwrap(hermes["voice"] as? [String: Any])
+        XCTAssertNil(voice["url"])
+        XCTAssertEqual(voice["username"] as? String, "rez")
+        XCTAssertEqual(voice["password"] as? String, "file-pass")
+        let shortcuts = try XCTUnwrap(json["shortcuts"] as? [String: String])
+        XCTAssertEqual(shortcuts["talk"], "shift+cmd+space")
+        XCTAssertEqual(shortcuts["handsFree"], "f6")
+        XCTAssertEqual(shortcuts["volume"], "ctrl+v")
+        XCTAssertEqual(json["other"] as? [Int], [1, 2])
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: true, idleSeconds: 45))
+        XCTAssertEqual(Shortcuts.load(home: home).0.handsFree.display, "F6")
+    }
+
+    func testEmptyTextsRemoveEmptyObjects() {
+        let json = EditableSettings().applied(to: ["hermes": ["url": "http://h:1", "voice": ["username": "u"]]])
+        XCTAssertNil(json["hermes"])
+        XCTAssertNotNil(json["shortcuts"])
+    }
+
+    func testHandsFreeDefaultsAndLimits() throws {
+        let home = temporaryHome()
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: false, idleSeconds: 20))
+        try writeConfig(#"{"handsFree": {"enabled": true, "idleSeconds": 500}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings(enabled: true, idleSeconds: 120))
+        try writeConfig(#"{"handsFree": {"idleSeconds": 3}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home).idleSeconds, 10)
+        try writeConfig(#"{"handsFree": {"enabled": "yes", "idleSeconds": "30"}}"#, home: home)
+        XCTAssertEqual(HandsFreeSettings.load(home: home), HandsFreeSettings())
+    }
+}
+
+final class SecretLookupTests: XCTestCase {
+    private func home(config: String?, env: String?) throws -> URL {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let manager = FileManager.default
+        try manager.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try manager.createDirectory(at: home.appendingPathComponent(".hermes"), withIntermediateDirectories: true)
+        if let config { try config.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8) }
+        if let env { try env.write(to: home.appendingPathComponent(".hermes/.env"), atomically: true, encoding: .utf8) }
+        return home
+    }
+
+    private let keychain: (String) -> String? = { ["hermes.key": "chain-key", "hermes.voice.password": "chain-pass"][$0] }
+    private let emptyKeychain: (String) -> String? = { _ in nil }
+
+    func testKeyOrderEnvironmentKeychainFileDotEnv() throws {
+        let home = try home(config: #"{"hermes": {"key": "file-key"}}"#, env: "API_SERVER_KEY=env-file-key")
+        XCTAssertEqual(HermesSettings.load(environment: ["BRUH_HERMES_KEY": "env"], home: home, secret: keychain)?.key, "env")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: keychain)?.key, "chain-key")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: emptyKeychain)?.key, "file-key")
+
+        let noFileKey = try self.home(config: #"{"hermes": {"url": "http://h:1"}}"#, env: "API_SERVER_KEY=env-file-key")
+        XCTAssertEqual(HermesSettings.load(environment: [:], home: noFileKey, secret: emptyKeychain),
+                       HermesSettings(url: URL(string: "http://h:1")!, key: "env-file-key"))
+    }
+
+    func testPasswordOrderEnvironmentKeychainFile() throws {
+        let home = try home(config: #"{"hermes": {"voice": {"username": "u", "password": "file-pass"}}}"#, env: nil)
+        XCTAssertEqual(HermesVoiceSettings.load(environment: ["BRUH_HERMES_PASSWORD": "env"], home: home, secret: keychain).password, "env")
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: keychain).password, "chain-pass")
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: emptyKeychain).password, "file-pass")
+    }
+
+    func testAnotherHomeFolderNeverReadsTheKeychain() {
+        let other = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        XCTAssertNil(Secrets.lookup(nil, home: other)(Secrets.hermesKey))
+        XCTAssertEqual(Secrets.lookup(keychain, home: other)(Secrets.hermesKey), "chain-key")
+    }
+}
+
+final class RemoteHermesTests: XCTestCase {
+    private let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    private let access: (String) -> String? = {
+        ["hermes.key": "k", "cf-access.client-id": "chain-id", "cf-access.client-secret": "chain-secret"][$0]
+    }
+
+    func testAccessHeadersNeedBothValues() {
+        let both = ["CF-Access-Client-Id": "chain-id", "CF-Access-Client-Secret": "chain-secret"]
+        XCTAssertEqual(CloudflareAccess.headers(environment: [:], secret: access), both)
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: access)["CF-Access-Client-Id"], "env-id")
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: { _ in nil }), [:])
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "i", "BRUH_CF_ACCESS_CLIENT_SECRET": " "], secret: { _ in nil }), [:])
+    }
+
+    func testLoadersFillTheHeaders() throws {
+        let hermes = try XCTUnwrap(HermesSettings.load(environment: ["BRUH_HERMES_URL": "https://hermes.example.com"], home: home, secret: access))
+        XCTAssertEqual(hermes.headers["CF-Access-Client-Secret"], "chain-secret")
+        XCTAssertFalse(hermes.isLocal)
+        let voice = HermesVoiceSettings.load(environment: [:], home: home, secret: access)
+        XCTAssertEqual(voice.headers["CF-Access-Client-Id"], "chain-id")
+        XCTAssertTrue(voice.isLocal)
+        XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: { _ in nil }).headers, [:])
+    }
+
+    func testIsLocal() {
+        for text in ["http://127.0.0.1:8642", "http://localhost:9119", "http://LOCALHOST", "http://[::1]:8642"] {
+            XCTAssertTrue(HermesSettings(url: URL(string: text)!, key: "k").isLocal, text)
+        }
+        for text in ["https://hermes.example.com", "http://100.64.0.2:8642", "http://my-mac.tail1234.ts.net:8642"] {
+            XCTAssertFalse(HermesVoiceSettings(url: URL(string: text)!).isLocal, text)
+        }
+    }
+}
