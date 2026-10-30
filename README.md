@@ -163,7 +163,8 @@ build/Brah.app/Contents/MacOS/Brah --talk 5
 build/Brah.app/Contents/MacOS/Brah --converse
 ```
 
-`--converse` starts a hands-free conversation as "Hey Brah" does. `BRAH_SNAPSHOT_PATH=/tmp/s.jpg`
+`--converse` starts a hands-free conversation as "Hey Brah" does. `--ask "..." --yes` says yes
+once when the agent asks to act, as a click on Allow would. `BRAH_SNAPSHOT_PATH=/tmp/s.jpg`
 saves the exact picture the agent gets.
 
 ## Licence
