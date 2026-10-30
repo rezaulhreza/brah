@@ -14,7 +14,7 @@ mkdir -p "$out"
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
-for state in listening typing thinking answer approval handsfree settings; do
+for state in listening typing thinking answer guide done approval handsfree settings; do
   : > "$log"
   "$app" --demo "$state" > "$log" 2>&1 &
   pid=$!

@@ -5,7 +5,7 @@ import SwiftUI
 /// a cursor, and its own windows on top, so a picture shows nothing of the real screen. The
 /// line `demo frame x y w h` (points, origin top-left) tells scripts/screenshots.sh what to capture.
 enum DemoState: String, CaseIterable {
-    case listening, typing, thinking, answer, approval, handsfree, settings
+    case listening, typing, thinking, answer, guide, done, approval, handsfree, settings
 }
 
 private enum Stage {
@@ -165,30 +165,39 @@ extension AppDelegate {
 
         AudioIO.shared.demoLevels = true
         let model = bubble.model
-        let cursor = CGPoint(x: frame.minX + Stage.cursor.x, y: frame.maxY - Stage.cursor.y)
+        let mouse = CGPoint(x: frame.minX + Stage.cursor.x, y: frame.maxY - Stage.cursor.y)
         model.agentName = "Hermes"
         model.muted = false
         model.handsFree = false
         model.step = nil
+        model.guideStep = nil
+        model.celebrating = false
 
         switch state {
         case .listening:
-            bubble.show(near: cursor, phase: .listening, typing: false)
+            bubble.show(near: mouse, phase: .listening, typing: false)
             model.question = "How do I export this as a PDF?"
         case .typing:
-            bubble.show(near: cursor, phase: .asking, typing: true)
+            bubble.show(near: mouse, phase: .asking, typing: true)
             model.question = "Which bill is the biggest this month?"
         case .thinking:
-            bubble.show(near: cursor, phase: .thinking, typing: false)
+            bubble.show(near: mouse, phase: .thinking, typing: false)
             model.question = "Export it as a PDF to my Desktop."
             model.step = "Clicking Export"
         case .answer:
-            bubble.show(near: cursor, phase: .answer("Use the Export button at the top right, then choose PDF."), typing: false)
-            pointer.show(at: Stage.export, label: "Export", on: frame)
+            bubble.show(near: mouse, phase: .answer("Use the Export button at the top right, then choose PDF."), typing: false)
+            cursor.show(at: Stage.export, label: "Export", on: frame)
+        case .guide:
+            bubble.show(near: mouse, phase: .answer("Click Export, at the top right."), typing: false)
+            model.guideStep = 1
+            cursor.show(at: Stage.export, label: "Export", on: frame)
+        case .done:
+            bubble.show(near: mouse, phase: .answer("Done. Q3 Budget.pdf is on your Desktop."), typing: false)
+            model.celebrating = true
         case .approval:
-            bubble.show(near: cursor, phase: .approval("I'll export Q3 Budget as a PDF to your Desktop."), typing: false)
+            bubble.show(near: mouse, phase: .approval("I'll export Q3 Budget as a PDF to your Desktop."), typing: false)
         case .handsfree:
-            bubble.show(near: cursor, phase: .listening, typing: false)
+            bubble.show(near: mouse, phase: .listening, typing: false)
             model.handsFree = true
             model.question = "Who paid for the studio rent?"
         case .settings:

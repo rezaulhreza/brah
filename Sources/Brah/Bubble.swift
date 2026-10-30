@@ -21,6 +21,27 @@ final class BubbleModel: ObservableObject {
     /// A hands-free conversation is on: Brah listens again after each answer.
     @Published var handsFree = false
     @Published var muted = false
+    /// The step of a "show me" guide, from 1. Nil when Brah is not guiding.
+    @Published var guideStep: Int?
+    /// The agent works on the screen after a yes.
+    @Published var acting = false
+    /// A task is done: happy eyes for a moment.
+    @Published var celebrating = false
+    var onDoIt: () -> Void = {}
+
+    /// How Brah looks now.
+    var mood: Mood {
+        if celebrating { return .happy }
+        switch phase {
+        case .listening: return .listening
+        case .transcribing: return .thinking
+        case .asking: return .looking(CGVector(dx: 0.2, dy: 1))
+        case .thinking: return acting ? .working : .thinking
+        case .answer: return guideStep != nil ? .looking(CGVector(dx: 0.9, dy: -0.4)) : .speaking
+        case .approval: return .asking
+        case .failed: return .unimpressed
+        }
+    }
     var agentName = "Hermes"
     var onSubmit: (String) -> Void = { _ in }
     var onStop: () -> Void = {}
@@ -53,7 +74,7 @@ struct BubbleView: View {
     /// Brah's eyes, the sound, and the controls.
     private var header: some View {
         HStack(spacing: 8) {
-            BrahMark()
+            BrahFace(mood: model.mood)
             if model.phase == .listening || model.handsFree {
                 Waveform(input: model.phase == .listening)
             } else if case .answer = model.phase, !model.muted {
@@ -96,7 +117,13 @@ struct BubbleView: View {
             }
         case .answer(let text):
             Answer(text: text)
-            if let step = model.step {
+            if let number = model.guideStep {
+                HStack(spacing: 8) {
+                    hint("Step \(number): click where Brah points")
+                    Spacer()
+                    Button("Do it for me", action: model.onDoIt).controlSize(.small)
+                }
+            } else if let step = model.step {
                 hint(step)
             }
         case .approval(let text):
@@ -158,23 +185,6 @@ private struct Answer: View {
                 }
             }
             .onHover { hovering = $0 }
-    }
-}
-
-/// Brah's half-shut eyes, from the menu bar icon.
-private struct BrahMark: View {
-    private static let image: NSImage? = {
-        let image = Bundle.main.image(forResource: "MenuIcon")
-        image?.isTemplate = true
-        return image
-    }()
-
-    var body: some View {
-        if let image = Self.image {
-            Image(nsImage: image).resizable().frame(width: 20, height: 20).foregroundStyle(.primary)
-        } else {
-            Image(systemName: "eyes").frame(width: 20, height: 20)
-        }
     }
 }
 

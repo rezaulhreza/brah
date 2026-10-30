@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     lazy var bubble = Bubble(onEscape: { [weak self] in self?.escape() })
-    let pointer = Pointer()
+    let cursor = BrahCursor()
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -52,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let settingsWindow = SettingsWindow()
     /// The fake app behind the bubble in demo mode.
     var demoStage: NSPanel?
+    /// Watches clicks in other apps while a "show me" guide waits for the user.
+    private var clickWatch: Any?
+    private var pointerHide: DispatchWorkItem?
     /// Screen actions only make sense for an agent on this Mac: a Hermes on a server would click
     /// on the server.
     private var agentIsLocal = true
@@ -104,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         model.onApprove = { [weak self] yes in yes ? self?.approve() : self?.deny() }
+        model.onDoIt = { [weak self] in self?.doItForMe() }
 
         loadShortcuts()
         registerHotkeys()
@@ -209,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         endConversation()
         stop()
-        pointer.hide()
+        cursor.hide()
         pressedAt = Date()
         let mouse = NSEvent.mouseLocation
         capture = Task { try await Capture.snapshot() }
@@ -300,7 +304,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.arrived(event, for: id) } }
                 }
                 guard !Task.isCancelled, workID == id else { return }
-                log("reply=\(reply.text.debugDescription) point=\(String(describing: reply.point)) ask=\(reply.needsApproval)")
+                log("reply=\(reply.text.debugDescription) point=\(String(describing: reply.point)) step=\(String(describing: reply.step)) ask=\(reply.needsApproval) done=\(reply.done)")
+                let wasActing = bubble.model.acting
+                bubble.model.acting = false
                 if reply.needsApproval {
                     awaitingApproval = true
                     bubble.model.phase = .approval(reply.text)
@@ -311,8 +317,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if speaks {
                     voice.endReply(reply.text)
                 }
-                if let spot = reply.point {
-                    pointer.show(at: snapshot.viewPoint(spot), label: spot.label, on: snapshot.screenFrame)
+                if let step = reply.step, !reply.needsApproval {
+                    showStep(step, on: snapshot)
+                } else {
+                    if bubble.model.guideStep != nil || reply.done || wasActing {
+                        endGuide(happy: reply.done || wasActing)
+                    }
+                    if let spot = reply.point {
+                        point(at: spot, on: snapshot)
+                    }
                 }
             } catch {
                 guard !Task.isCancelled, workID == id else { return }
@@ -363,7 +376,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log("approved")
         capture = Task { try await Capture.snapshot() }
         bubble.model.question = "Yes, go ahead."
+        bubble.model.acting = true
         submit("Yes, go ahead.", approved: true)
+    }
+
+    // MARK: Show me
+
+    /// One step of a guide: Brah's cursor flies to the place, and Brah waits for the user's click
+    /// anywhere. The click means "done", and Brah asks for the next step with a new screenshot.
+    private func showStep(_ step: Spot, on snapshot: Snapshot) {
+        bubble.model.guideStep = (bubble.model.guideStep ?? 0) + 1
+        log("guide step \(bubble.model.guideStep ?? 0): \(step.label)")
+        pointerHide?.cancel()
+        cursor.mood = nil
+        cursor.show(at: snapshot.viewPoint(step), label: step.label, on: snapshot.screenFrame)
+        if clickWatch == nil {
+            // Clicks in other apps only: a click on Brah's own bubble is not a step.
+            clickWatch = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.userClicked() } }
+            }
+        }
+    }
+
+    private func userClicked() {
+        guard bubble.model.guideStep != nil, work == nil, !awaitingApproval else { return }
+        log("guide: the user clicked")
+        cursor.mood = .thinking
+        Task {
+            // Let the app under the click change before Brah looks again.
+            try? await Task.sleep(for: .milliseconds(700))
+            guard bubble.model.guideStep != nil, work == nil else { return }
+            capture = Task { try await Capture.snapshot() }
+            bubble.model.question = "Next step"
+            submit("I clicked it. What is the next step?")
+        }
+    }
+
+    /// The rest of a guide, done by the agent. The cua-driver shows its own cursor while it works,
+    /// so Brah's cursor steps aside.
+    private func doItForMe() {
+        guard bubble.model.guideStep != nil else { return }
+        log("guide: do it for me")
+        stopWatchingClicks()
+        bubble.model.guideStep = nil
+        cursor.hide()
+        capture = Task { try await Capture.snapshot() }
+        bubble.model.question = "Do it for me"
+        bubble.model.acting = true
+        submit("Do it for me: finish the remaining steps yourself.", approved: true)
+    }
+
+    /// A guide or an approved task is over. `happy`: it worked, so the eyes say so for a moment.
+    private func endGuide(happy: Bool) {
+        stopWatchingClicks()
+        bubble.model.guideStep = nil
+        guard happy else {
+            cursor.hide()
+            return
+        }
+        bubble.model.celebrating = true
+        cursor.mood = .happy
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            bubble.model.celebrating = false
+            if bubble.model.guideStep == nil {
+                cursor.hide()
+            }
+        }
+    }
+
+    private func stopWatchingClicks() {
+        if let clickWatch {
+            NSEvent.removeMonitor(clickWatch)
+        }
+        clickWatch = nil
+    }
+
+    /// One place, with no guide: the cursor flies there and leaves after a while.
+    private func point(at spot: Spot, on snapshot: Snapshot) {
+        cursor.mood = nil
+        cursor.show(at: snapshot.viewPoint(spot), label: spot.label, on: snapshot.screenFrame)
+        pointerHide?.cancel()
+        let hide = DispatchWorkItem { [weak self] in
+            guard let self, self.bubble.model.guideStep == nil else { return }
+            self.cursor.hide()
+        }
+        pointerHide = hide
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: hide)
     }
 
     private func deny() {
@@ -398,6 +497,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workID = UUID()
         voice.stop()
         awaitingApproval = false
+        stopWatchingClicks()
+        bubble.model.guideStep = nil
+        bubble.model.acting = false
+        bubble.model.celebrating = false
+        // A last flat look, then the cursor goes.
+        cursor.mood = .unimpressed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self, self.work == nil, self.bubble.model.guideStep == nil else { return }
+            self.cursor.hide()
+        }
         if bubble.model.isBusy {
             bubble.model.phase = conversation == nil ? .failed("Stopped.") : .listening
         }
@@ -417,7 +526,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         endConversation()
         stop()
         bubble.hide()
-        pointer.hide()
+        cursor.hide()
     }
 
     private func escape() {
@@ -468,7 +577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginConversation(keepBubble: Bool = false) {
         wake.stop()
         stop()
-        pointer.hide()
+        cursor.hide()
         let session = Conversation()
         conversation = session
         capture = Task { try await Capture.snapshot() }
@@ -710,7 +819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func menuType() {
         endConversation()
         stop()
-        pointer.hide()
+        cursor.hide()
         capture = Task { try await Capture.snapshot() }
         bubble.show(near: NSEvent.mouseLocation, phase: .asking, typing: true)
     }
