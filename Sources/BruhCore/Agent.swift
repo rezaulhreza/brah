@@ -20,7 +20,9 @@ public protocol AgentConnection: Sendable {
 
 public enum Brief {
     /// The instructions every agent gets with a question. Short, because it rides on every turn.
-    public static func system(for snapshot: Snapshot) -> String {
+    /// `canAct` is false for an agent that is not on the user's Mac: its screen tools would act
+    /// on another computer.
+    public static func system(for snapshot: Snapshot, canAct: Bool = true) -> String {
         let width = Int(snapshot.imageSize.width)
         let height = Int(snapshot.imageSize.height)
         let cx = Int(snapshot.cursor.x)
@@ -45,11 +47,24 @@ public enum Brief {
         POINT 412 230 Save button
         with x and y in screenshot pixels.
 
-        You can work on the screen with computer_use, but only when the user asks you to do         something on it. Before your first screen action in a request, say in one short sentence         what you will do, end your answer with a line that is exactly
-        ASK
-        and stop. The screen stays locked until the user says yes; then do the work and say in         one short sentence what you did.
+        \(canAct ? acting : notActing)
         """
     }
+
+    static let acting = """
+    You can work on the screen with computer_use, but only when the user asks you to do \
+    something on it. Before your first screen action in a request, say in one short sentence \
+    what you will do, end your answer with a line that is exactly
+    ASK
+    and stop. The screen stays locked until the user says yes; then do the work and say in \
+    one short sentence what you did.
+    """
+
+    static let notActing = """
+    You run on another computer, not on the user's Mac, so do not use computer_use or browser \
+    tools for this screen: they would act on your computer. Tell the user where to click instead, \
+    and point at it.
+    """
 }
 
 public enum AgentError: LocalizedError {

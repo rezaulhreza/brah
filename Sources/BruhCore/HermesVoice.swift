@@ -94,7 +94,9 @@ public actor HermesVoice {
         connected = false
         token = nil
 
-        if let (data, response) = try? await session.data(from: settings.url),
+        var page = URLRequest(url: settings.url)
+        settings.headers.forEach { page.setValue($1, forHTTPHeaderField: $0) }
+        if let (data, response) = try? await session.data(for: page),
            (response as? HTTPURLResponse)?.statusCode == 200,
            let found = HermesVoiceSettings.pageToken(String(decoding: data, as: UTF8.self)) {
             token = found
@@ -137,6 +139,7 @@ public actor HermesVoice {
         components.queryItems = [URLQueryItem(name: "ticket", value: ticket)]
         var request = URLRequest(url: components.url!)
         request.setValue(settings.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
+        settings.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         let task = session.webSocketTask(with: request)
         task.resume()
         return task
@@ -197,6 +200,7 @@ public actor HermesVoice {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("bruh", forHTTPHeaderField: "X-Requested-With")
+        settings.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         if let token {
             request.setValue(token, forHTTPHeaderField: "X-Hermes-Session-Token")
         }

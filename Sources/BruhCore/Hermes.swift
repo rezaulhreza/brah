@@ -118,6 +118,7 @@ public actor HermesConnection: AgentConnection {
         request.timeoutInterval = 300
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(settings.key)", forHTTPHeaderField: "Authorization")
+        settings.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         if let sessionID {
             request.setValue(sessionID, forHTTPHeaderField: "X-Hermes-Session-Id")
         }
@@ -127,7 +128,7 @@ public actor HermesConnection: AgentConnection {
             "model": "hermes-agent",
             "stream": true,
             "messages": [
-                ["role": "system", "content": Brief.system(for: snapshot)],
+                ["role": "system", "content": Brief.system(for: snapshot, canAct: settings.isLocal)],
                 ["role": "user", "content": [
                     ["type": "text", "text": question],
                     ["type": "image_url", "image_url": ["url": image]],

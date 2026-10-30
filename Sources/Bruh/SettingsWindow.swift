@@ -9,6 +9,9 @@ import SwiftUI
 final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Called after a save, before the window closes.
     var onSave: () -> Void = {}
+    /// True when the window opens, false when it closes. The app pauses its global shortcuts
+    /// meanwhile, so the key recorder gets every key.
+    var onOpen: (Bool) -> Void = { _ in }
 
     private var window: NSWindow?
     private var model: SettingsModel?
@@ -36,6 +39,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.center()
         self.model = model
         self.window = window
+        onOpen(true)
 
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
@@ -50,6 +54,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         model?.stopRecording()
         model = nil
         window = nil
+        onOpen(false)
     }
 }
 

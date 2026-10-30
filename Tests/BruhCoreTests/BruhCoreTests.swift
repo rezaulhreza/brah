@@ -524,3 +524,20 @@ final class RemoteHermesTests: XCTestCase {
         }
     }
 }
+
+final class BriefTests: XCTestCase {
+    private let snapshot = Snapshot(jpeg: Data(), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                                    cursor: .zero, appName: nil, windowTitle: nil)
+
+    func testLocalAgentMayActAfterAsking() {
+        let brief = Brief.system(for: snapshot, canAct: true)
+        XCTAssertTrue(brief.contains("ASK"))
+        XCTAssertFalse(brief.contains("  "), "no runs of spaces from broken line joins")
+    }
+
+    func testRemoteAgentMustNotAct() {
+        let brief = Brief.system(for: snapshot, canAct: false)
+        XCTAssertTrue(brief.contains("do not use computer_use"))
+        XCTAssertFalse(brief.contains("\nASK\n"))
+    }
+}

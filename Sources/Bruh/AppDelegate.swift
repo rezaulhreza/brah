@@ -49,20 +49,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "speak") }
     }
 
+    private let settingsWindow = SettingsWindow()
+    /// Screen actions only make sense for an agent on this Mac: a Hermes on a server would click
+    /// on the server.
+    private var agentIsLocal = true
+
+    /// Saved in the config file with the other settings.
     private var handsFreeOn: Bool {
-        get { UserDefaults.standard.bool(forKey: "handsFree") }
-        set { UserDefaults.standard.set(newValue, forKey: "handsFree") }
+        get { HandsFreeSettings.load().enabled }
+        set {
+            guard var json = try? ConfigFile.read() else { return }
+            var settings = EditableSettings(json: json)
+            settings.handsFree.enabled = newValue
+            json = settings.applied(to: json)
+            do {
+                try ConfigFile.write(json)
+            } catch {
+                log("could not save hands-free: \(error)")
+            }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        agent = HermesSettings.load().map { HermesConnection(settings: $0) }
+        loadAgent()
+        settingsWindow.onSave = { [weak self] in self?.reloadSettings() }
+        settingsWindow.onOpen = { [weak self] open in
+            // The key recorder must get every key, Bruh's own shortcuts too.
+            open ? Hotkeys.unregisterAll() : self?.registerHotkeys()
+        }
         voice.log = { [weak self] line in self?.log(line) }
         AudioIO.shared.log = { [weak self] line in DispatchQueue.main.async { self?.log(line) } }
         connectVoice()
-        log("agent: \(agent?.name ?? "none")")
 
         let model = bubble.model
-        model.agentName = agent?.name ?? "Hermes"
         model.muted = !speaks
         model.onSubmit = { [weak self] question in self?.submit(question) }
         model.onStop = { [weak self] in self?.stop() }
@@ -79,13 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         model.onApprove = { [weak self] yes in yes ? self?.approve() : self?.deny() }
 
-        let problems: [String]
-        (shortcuts, problems) = Shortcuts.load()
-        problems.forEach { log($0) }
-        Hotkeys.register(shortcuts.talk, onRelease: { [weak self] in self?.released() }) { [weak self] in self?.pressed() }
-        Hotkeys.register(shortcuts.stop) { [weak self] in self?.stop() }
-        Hotkeys.register(shortcuts.hide) { [weak self] in self?.hide() }
-        Hotkeys.register(shortcuts.mute) { [weak self] in self?.toggleMute() }
+        loadShortcuts()
+        registerHotkeys()
+        idleSeconds = TimeInterval(HandsFreeSettings.load().idleSeconds)
 
         if !CGPreflightScreenCaptureAccess() {
             CGRequestScreenCaptureAccess()
@@ -109,6 +124,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = done.wait(timeout: .now() + 1.5)
     }
 
+    private func loadAgent() {
+        let settings = HermesSettings.load()
+        agent = settings.map { HermesConnection(settings: $0) }
+        agentIsLocal = settings?.isLocal ?? true
+        bubble.model.agentName = agent?.name ?? "Hermes"
+        log("agent: \(agent?.name ?? "none")\(agentIsLocal ? "" : " on a server (no screen actions)")")
+    }
+
+    private func loadShortcuts() {
+        let problems: [String]
+        (shortcuts, problems) = Shortcuts.load()
+        problems.forEach { log($0) }
+    }
+
+    private func registerHotkeys() {
+        Hotkeys.unregisterAll()
+        Hotkeys.register(shortcuts.talk, onRelease: { [weak self] in self?.released() }) { [weak self] in self?.pressed() }
+        Hotkeys.register(shortcuts.stop) { [weak self] in self?.stop() }
+        Hotkeys.register(shortcuts.hide) { [weak self] in self?.hide() }
+        Hotkeys.register(shortcuts.mute) { [weak self] in self?.toggleMute() }
+        Hotkeys.register(shortcuts.handsFree) { [weak self] in self?.toggleHandsFree() }
+    }
+
+    /// After a save in the Settings window: everything again, from the saved settings.
+    private func reloadSettings() {
+        log("settings saved")
+        hide()
+        loadAgent()
+        loadShortcuts()
+        registerHotkeys()
+        let handsFree = HandsFreeSettings.load()
+        idleSeconds = TimeInterval(handsFree.idleSeconds)
+        wake.stop()
+        connectVoice()
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        buildMenu()
+        if handsFree.enabled {
+            startWake()
+        }
+    }
+
     /// Use the Hermes voice when the backend lets Bruh in. Until then, and when it does not, the
     /// Mac speaks.
     private func connectVoice() {
@@ -118,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try await hermes.connect()
                 dashboard = hermes
                 voice = Voice(hermes: hermes, deepgram: await hermes.deepgramLive())
-                canHoldScreen = await hermes.canHoldScreen()
+                canHoldScreen = agentIsLocal ? await hermes.canHoldScreen() : false
             } catch {
                 log("Hermes voice not available: \(error.localizedDescription)")
             }
@@ -589,6 +647,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
         menu.addItem(NSMenuItem(title: "Quit Bruh", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         item.menu = menu
@@ -639,6 +700,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuStop() { stop() }
     @objc private func menuHide() { hide() }
+
+    @objc private func openSettings() {
+        settingsWindow.show()
+    }
 
     @objc private func toggleHandsFree() {
         setHandsFree(!handsFreeOn)

@@ -30,6 +30,13 @@ enum Hotkeys {
         refs.append(ref)
     }
 
+    /// Give every key back to the system: for new shortcuts, and while the key recorder listens.
+    static func unregisterAll() {
+        refs.compactMap { $0 }.forEach { UnregisterEventHotKey($0) }
+        refs = []
+        actions = [:]
+    }
+
     private static func installIfNeeded() {
         guard !installed else { return }
         installed = true
