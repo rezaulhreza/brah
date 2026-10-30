@@ -115,16 +115,20 @@ final class AudioIO: @unchecked Sendable {
     }
 
     private func stopIfUnused() {
-        lock.withLock {
-            guard users == 0, running else { return }
-            engine.inputNode.removeTap(onBus: 0)
-            player.removeTap(onBus: 0)
-            player.stop()
-            engine.stop()
-            try? engine.inputNode.setVoiceProcessingEnabled(false)
+        let stop = lock.withLock { () -> Bool in
+            guard users == 0, running else { return false }
             running = false
-            queued = 0
+            return true
         }
+        guard stop else { return }
+        // Outside the lock: stopping the player runs the completion handlers of queued sound,
+        // and those take the lock.
+        engine.inputNode.removeTap(onBus: 0)
+        player.removeTap(onBus: 0)
+        player.stop()
+        engine.stop()
+        try? engine.inputNode.setVoiceProcessingEnabled(false)
+        lock.withLock { queued = 0 }
     }
 
     // MARK: Microphone
@@ -244,12 +248,12 @@ final class AudioIO: @unchecked Sendable {
 
     /// Drop everything queued and stop the sound now.
     func stopPlayback() {
-        lock.withLock {
-            guard running else { return }
-            player.stop()
-            player.play()
-            queued = 0
-        }
+        guard lock.withLock({ running }) else { return }
+        // Outside the lock: player.stop() calls the completion handlers of the queued buffers
+        // at once, and they take the lock. Under the lock this was a deadlock.
+        player.stop()
+        player.play()
+        lock.withLock { queued = 0 }
     }
 }
 

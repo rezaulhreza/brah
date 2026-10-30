@@ -288,6 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await lockScreen(!approved)
             do {
                 let snapshot = try await capture.value
+                log("asking\(approved ? " (approved)" : ""): \(question.debugDescription)")
                 let reply = try await agent.ask(question, snapshot: snapshot) { [weak self] event in
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.arrived(event, for: id) } }
                 }
@@ -344,6 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try await dashboard.holdScreen(locked, reason: "Brah: the user has not said yes to screen actions yet")
             holdingScreen = locked
+            log(locked ? "screen locked" : "screen unlocked")
         } catch {
             log("screen lock failed: \(error.localizedDescription)")
         }
@@ -597,6 +599,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bubble.show(near: NSEvent.mouseLocation, phase: .asking, typing: false)
             bubble.model.question = question
             submit(question)
+            // `--yes` says yes once when the agent asks to act, as a click on Allow would.
+            if arguments.contains("--yes") {
+                Task {
+                    while !awaitingApproval { try? await Task.sleep(for: .milliseconds(200)) }
+                    try? await Task.sleep(for: .seconds(1))
+                    approve()
+                }
+            }
         } else if let index = arguments.firstIndex(of: "--talk"), index + 1 < arguments.count,
                   let seconds = Double(arguments[index + 1]) {
             Task {
