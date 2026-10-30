@@ -88,16 +88,18 @@ public struct SpokenText {
 
     enum PointMatch { case yes, maybe, no }
 
-    // "POINT", then x and y. What follows them is the label.
-    private static let full = try! Regex(#"^POINT\s+-?[\d.]+,?\s+-?[\d.]+(\s|\]|$)"#)
+    // "POINT" or "STEP", then x and y. What follows them is the label.
+    private static let full = try! Regex(#"^(POINT|STEP)\s+-?[\d.]+,?\s+-?[\d.]+(\s|\]|$)"#)
     // A line that can still grow into one.
-    private static let partial = try! Regex(#"^POINT(\s+(-?[\d.]*(,?(\s+(-?[\d.]*)?)?)?)?)?$"#)
+    private static let partial = try! Regex(#"^(POINT|STEP)(\s+(-?[\d.]*(,?(\s+(-?[\d.]*)?)?)?)?)?$"#)
+    /// Lines that are one word for Brah: wait for a yes, or the guide is over.
+    private static let words = ["ASK", "DONE"]
 
-    /// Whether a line, from its start, is a POINT line, can still become one, or cannot.
+    /// Whether a line, from its start, is a POINT or STEP line, can still become one, or cannot.
     static func match(_ line: String) -> PointMatch {
         let start = line.drop(while: { $0 == " " || $0 == "[" || $0 == "`" }).uppercased()
         if start.firstMatch(of: full) != nil { return .yes }
-        if "POINT".hasPrefix(start) || start.wholeMatch(of: partial) != nil { return .maybe }
+        if "POINT".hasPrefix(start) || "STEP".hasPrefix(start) || start.wholeMatch(of: partial) != nil { return .maybe }
         return .no
     }
 
@@ -105,13 +107,14 @@ public struct SpokenText {
         if atLineStart {
             let match = Self.match(line)
             if ended {
-                let isAsk = line.trimmingCharacters(in: .whitespaces).uppercased() == "ASK"
-                let out = match == .yes || isAsk ? "" : line
+                let word = line.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]`")).uppercased()
+                let out = match == .yes || Self.words.contains(word) ? "" : line
                 line = ""
                 return out
             }
-            // "ASK" alone on a line is for Brah, not for the voice: hold it until the line ends.
-            if "ASK".hasPrefix(line.trimmingCharacters(in: .whitespaces).uppercased()) {
+            // "ASK" or "DONE" alone on a line is for Brah, not for the voice: hold it until the line ends.
+            let start = line.trimmingCharacters(in: .whitespaces).uppercased()
+            if Self.words.contains(where: { $0.hasPrefix(start) }) {
                 return ""
             }
             if match != .no {

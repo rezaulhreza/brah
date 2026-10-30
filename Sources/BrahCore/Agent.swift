@@ -47,9 +47,22 @@ public enum Brief {
         POINT 412 230 Save button
         with x and y in screenshot pixels.
 
+        \(guiding)
+
         \(canAct ? acting : notActing)
         """
     }
+
+    static let guiding = """
+    When the user asks how to do something that takes more than one click, show them one step \
+    at a time. Say the step in one short sentence and end with one line exactly like
+    STEP 412 230 Export
+    with x and y in screenshot pixels, on the place to click. Then stop. The user clicks it, and \
+    you get a new screenshot to give the next step. When the task is done, say so in one short \
+    sentence and end with a line that is exactly
+    DONE
+    If the user says "do it for me", finish the remaining steps yourself.
+    """
 
     static let acting = """
     You can work on the screen with computer_use, but only when the user asks you to do \

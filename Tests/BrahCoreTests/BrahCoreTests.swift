@@ -541,3 +541,38 @@ final class BriefTests: XCTestCase {
     }
 }
 
+
+final class GuideTests: XCTestCase {
+    func testStepAndDoneLines() {
+        let step = Reply.parse("Click Export, at the top right.\nSTEP 1082 144 Export")
+        XCTAssertEqual(step.text, "Click Export, at the top right.")
+        XCTAssertEqual(step.step, Spot(x: 1082, y: 144, label: "Export"))
+        XCTAssertNil(step.point)
+        XCTAssertFalse(step.done)
+
+        let done = Reply.parse("That's it, the PDF is on your Desktop.\nDONE")
+        XCTAssertTrue(done.done)
+        XCTAssertNil(done.step)
+        XCTAssertEqual(done.text, "That's it, the PDF is on your Desktop.")
+    }
+
+    func testStepAndDoneAreNeverSpoken() {
+        var filter = SpokenText()
+        let spoken = ["Click Export.\nST", "EP 10", "82 144 Export"].map { filter.feed($0) }.joined() + filter.finish()
+        XCTAssertEqual(spoken, "Click Export.\n")
+
+        var done = SpokenText()
+        XCTAssertEqual(["All done.\nDO", "NE"].map { done.feed($0) }.joined() + done.finish(), "All done.\n")
+
+        var words = SpokenText()
+        XCTAssertEqual(["Do", " this. Step", " back."].map { words.feed($0) }.joined() + words.finish(), "Do this. Step back.")
+    }
+
+    func testBriefTeachesTheGuide() {
+        let snapshot = Snapshot(jpeg: Data(), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                                cursor: .zero, appName: nil, windowTitle: nil)
+        let brief = Brief.system(for: snapshot)
+        XCTAssertTrue(brief.contains("STEP 412 230 Export"))
+        XCTAssertTrue(brief.contains("\nDONE\n"))
+    }
+}
