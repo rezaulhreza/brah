@@ -110,7 +110,7 @@ public struct SpokenText {
                 line = ""
                 return out
             }
-            // "ASK" alone on a line is for Bruh, not for the voice: hold it until the line ends.
+            // "ASK" alone on a line is for Brah, not for the voice: hold it until the line ends.
             if "ASK".hasPrefix(line.trimmingCharacters(in: .whitespaces).uppercased()) {
                 return ""
             }

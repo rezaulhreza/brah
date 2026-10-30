@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 import XCTest
-@testable import BruhCore
+@testable import BrahCore
 
 final class ReplyTests: XCTestCase {
     func testTextWithoutPoint() {
@@ -75,7 +75,7 @@ final class HermesTests: XCTestCase {
         let fromFile = HermesSettings.load(environment: [:], home: home)
         XCTAssertEqual(fromFile, HermesSettings(url: HermesSettings.defaultURL, key: "from-file"))
 
-        let fromEnv = HermesSettings.load(environment: ["BRUH_HERMES_KEY": "env", "BRUH_HERMES_URL": "http://h:1"], home: home)
+        let fromEnv = HermesSettings.load(environment: ["BRAH_HERMES_KEY": "env", "BRAH_HERMES_URL": "http://h:1"], home: home)
         XCTAssertEqual(fromEnv, HermesSettings(url: URL(string: "http://h:1")!, key: "env"))
     }
 
@@ -158,9 +158,9 @@ final class VoiceTests: XCTestCase {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home), HermesVoiceSettings(url: HermesVoiceSettings.defaultURL))
 
-        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/brah"), withIntermediateDirectories: true)
         try #"{"hermes": {"voice": {"url": "http://h:2", "username": "u", "password": "p"}}}"#
-            .write(to: home.appendingPathComponent(".config/bruh/config.json"), atomically: true, encoding: .utf8)
+            .write(to: home.appendingPathComponent(".config/brah/config.json"), atomically: true, encoding: .utf8)
         XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home),
                        HermesVoiceSettings(url: URL(string: "http://h:2")!, username: "u", password: "p"))
     }
@@ -373,7 +373,7 @@ final class ConfigFileTests: XCTestCase {
     }
 
     private func writeConfig(_ text: String, home: URL) throws {
-        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/brah"), withIntermediateDirectories: true)
         try text.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8)
     }
 
@@ -390,7 +390,7 @@ final class ConfigFileTests: XCTestCase {
         let attributes = try FileManager.default.attributesOfItem(atPath: ConfigFile.url(home: home).path)
         XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
         XCTAssertEqual(try ConfigFile.read(home: home)["a"] as? Int, 1)
-        let leftovers = try FileManager.default.contentsOfDirectory(atPath: home.appendingPathComponent(".config/bruh").path)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: home.appendingPathComponent(".config/brah").path)
         XCTAssertEqual(leftovers, ["config.json"])
     }
 
@@ -456,7 +456,7 @@ final class SecretLookupTests: XCTestCase {
     private func home(config: String?, env: String?) throws -> URL {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let manager = FileManager.default
-        try manager.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try manager.createDirectory(at: home.appendingPathComponent(".config/brah"), withIntermediateDirectories: true)
         try manager.createDirectory(at: home.appendingPathComponent(".hermes"), withIntermediateDirectories: true)
         if let config { try config.write(to: ConfigFile.url(home: home), atomically: true, encoding: .utf8) }
         if let env { try env.write(to: home.appendingPathComponent(".hermes/.env"), atomically: true, encoding: .utf8) }
@@ -468,7 +468,7 @@ final class SecretLookupTests: XCTestCase {
 
     func testKeyOrderEnvironmentKeychainFileDotEnv() throws {
         let home = try home(config: #"{"hermes": {"key": "file-key"}}"#, env: "API_SERVER_KEY=env-file-key")
-        XCTAssertEqual(HermesSettings.load(environment: ["BRUH_HERMES_KEY": "env"], home: home, secret: keychain)?.key, "env")
+        XCTAssertEqual(HermesSettings.load(environment: ["BRAH_HERMES_KEY": "env"], home: home, secret: keychain)?.key, "env")
         XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: keychain)?.key, "chain-key")
         XCTAssertEqual(HermesSettings.load(environment: [:], home: home, secret: emptyKeychain)?.key, "file-key")
 
@@ -479,7 +479,7 @@ final class SecretLookupTests: XCTestCase {
 
     func testPasswordOrderEnvironmentKeychainFile() throws {
         let home = try home(config: #"{"hermes": {"voice": {"username": "u", "password": "file-pass"}}}"#, env: nil)
-        XCTAssertEqual(HermesVoiceSettings.load(environment: ["BRUH_HERMES_PASSWORD": "env"], home: home, secret: keychain).password, "env")
+        XCTAssertEqual(HermesVoiceSettings.load(environment: ["BRAH_HERMES_PASSWORD": "env"], home: home, secret: keychain).password, "env")
         XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: keychain).password, "chain-pass")
         XCTAssertEqual(HermesVoiceSettings.load(environment: [:], home: home, secret: emptyKeychain).password, "file-pass")
     }
@@ -500,13 +500,13 @@ final class RemoteHermesTests: XCTestCase {
     func testAccessHeadersNeedBothValues() {
         let both = ["CF-Access-Client-Id": "chain-id", "CF-Access-Client-Secret": "chain-secret"]
         XCTAssertEqual(CloudflareAccess.headers(environment: [:], secret: access), both)
-        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: access)["CF-Access-Client-Id"], "env-id")
-        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "env-id"], secret: { _ in nil }), [:])
-        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRUH_CF_ACCESS_CLIENT_ID": "i", "BRUH_CF_ACCESS_CLIENT_SECRET": " "], secret: { _ in nil }), [:])
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRAH_CF_ACCESS_CLIENT_ID": "env-id"], secret: access)["CF-Access-Client-Id"], "env-id")
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRAH_CF_ACCESS_CLIENT_ID": "env-id"], secret: { _ in nil }), [:])
+        XCTAssertEqual(CloudflareAccess.headers(environment: ["BRAH_CF_ACCESS_CLIENT_ID": "i", "BRAH_CF_ACCESS_CLIENT_SECRET": " "], secret: { _ in nil }), [:])
     }
 
     func testLoadersFillTheHeaders() throws {
-        let hermes = try XCTUnwrap(HermesSettings.load(environment: ["BRUH_HERMES_URL": "https://hermes.example.com"], home: home, secret: access))
+        let hermes = try XCTUnwrap(HermesSettings.load(environment: ["BRAH_HERMES_URL": "https://hermes.example.com"], home: home, secret: access))
         XCTAssertEqual(hermes.headers["CF-Access-Client-Secret"], "chain-secret")
         XCTAssertFalse(hermes.isLocal)
         let voice = HermesVoiceSettings.load(environment: [:], home: home, secret: access)
@@ -539,5 +539,25 @@ final class BriefTests: XCTestCase {
         let brief = Brief.system(for: snapshot, canAct: false)
         XCTAssertTrue(brief.contains("do not use computer_use"))
         XCTAssertFalse(brief.contains("\nASK\n"))
+    }
+}
+
+final class RenameTests: XCTestCase {
+    func testOldEnvironmentNamesStillWork() {
+        let env = BrahEnvironment.current(["BRUH_HERMES_KEY": "old", "BRUH_HERMES_URL": "http://a:1", "BRAH_HERMES_URL": "http://b:2"])
+        XCTAssertEqual(env["BRAH_HERMES_KEY"], "old")
+        XCTAssertEqual(env["BRAH_HERMES_URL"], "http://b:2", "a new name wins over an old one")
+    }
+
+    func testOldConfigFileIsReadUntilTheNewOneExists() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
+        try #"{"shortcuts": {"talk": "cmd+shift+space"}}"#
+            .write(to: home.appendingPathComponent(".config/bruh/config.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(Shortcuts.load(home: home).0.talk.display, "⇧⌘Space")
+
+        try ConfigFile.write(["shortcuts": ["talk": "ctrl+option+k"]], home: home)
+        XCTAssertEqual(ConfigFile.readableURL(home: home), ConfigFile.url(home: home))
+        XCTAssertEqual(Shortcuts.load(home: home).0.talk.display, "⌃⌥K")
     }
 }

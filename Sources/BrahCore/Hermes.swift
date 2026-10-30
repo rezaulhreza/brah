@@ -20,16 +20,16 @@ public struct HermesSettings: Equatable, Sendable {
     public var isLocal: Bool { CloudflareAccess.isLocal(url) }
 
     /// First match wins: the environment, then the Keychain (the key only, see `Secrets`), then
-    /// `~/.config/bruh/config.json`, then the `API_SERVER_KEY` line of `~/.hermes/.env` (a stock
+    /// `~/.config/brah/config.json`, then the `API_SERVER_KEY` line of `~/.hermes/.env` (a stock
     /// Hermes install on this Mac). `secret` looks up a Keychain account; nil means the Keychain
     /// when `home` is the user's own home folder. The Cloudflare Access headers come from
     /// `CloudflareAccess.headers`.
-    public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
+    public static func load(environment: [String: String] = BrahEnvironment.current(),
                             home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             secret: ((String) -> String?)? = nil) -> HermesSettings? {
         let secret = Secrets.lookup(secret, home: home)
-        var url = environment["BRUH_HERMES_URL"].flatMap(URL.init(string:))
-        var key = environment["BRUH_HERMES_KEY"] ?? secret(Secrets.hermesKey)
+        var url = environment["BRAH_HERMES_URL"].flatMap(URL.init(string:))
+        var key = environment["BRAH_HERMES_KEY"] ?? secret(Secrets.hermesKey)
 
         if let hermes = configSection(home: home) {
             url = url ?? (hermes["url"] as? String).flatMap(URL.init(string:))
@@ -45,7 +45,7 @@ public struct HermesSettings: Equatable, Sendable {
                               headers: CloudflareAccess.headers(environment: environment, secret: secret))
     }
 
-    /// The `hermes` object of `~/.config/bruh/config.json`.
+    /// The `hermes` object of `~/.config/brah/config.json`.
     static func configSection(home: URL) -> [String: Any]? {
         Config.json(home: home)?["hermes"] as? [String: Any]
     }
@@ -61,7 +61,7 @@ public struct HermesSettings: Equatable, Sendable {
     }
 }
 
-/// Hermes through its OpenAI-compatible API server. One conversation per run of Bruh: Hermes
+/// Hermes through its OpenAI-compatible API server. One conversation per run of Brah: Hermes
 /// returns a session id with the first answer, and later questions send it back.
 public actor HermesConnection: AgentConnection {
     public nonisolated let name = "Hermes"

@@ -1,10 +1,10 @@
 import AppKit
-import BruhCore
+import BrahCore
 import Carbon.HIToolbox
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// A press shorter than this is a tap: Bruh opens a text field. A longer one is talk.
+    /// A press shorter than this is a tap: Brah opens a text field. A longer one is talk.
     private static let tapSeconds = 0.35
 
     private var statusItem: NSStatusItem?
@@ -74,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loadAgent()
         settingsWindow.onSave = { [weak self] in self?.reloadSettings() }
         settingsWindow.onOpen = { [weak self] open in
-            // The key recorder must get every key, Bruh's own shortcuts too.
+            // The key recorder must get every key, Brah's own shortcuts too.
             open ? Hotkeys.unregisterAll() : self?.registerHotkeys()
         }
         voice.log = { [weak self] line in self?.log(line) }
@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Never leave the agent's screen tools locked after Bruh quits.
+        // Never leave the agent's screen tools locked after Brah quits.
         guard holdingScreen, let dashboard else { return }
         let done = DispatchSemaphore(value: 0)
         Task.detached {
@@ -167,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Use the Hermes voice when the backend lets Bruh in. Until then, and when it does not, the
+    /// Use the Hermes voice when the backend lets Brah in. Until then, and when it does not, the
     /// Mac speaks.
     private func connectVoice() {
         let hermes = HermesVoice(settings: HermesVoiceSettings.load())
@@ -187,13 +187,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func log(_ line: String) {
-        FileHandle.standardError.write(Data("bruh: \(line)\n".utf8))
+        FileHandle.standardError.write(Data("brah: \(line)\n".utf8))
     }
 
     // MARK: Hotkey
 
     /// Capture the screen at once, so the agent sees it as the user saw it, and start listening.
-    /// A press while Bruh is open closes it.
+    /// A press while Brah is open closes it.
     private func pressed() {
         if bubble.isVisible && pressedAt == nil && conversation == nil {
             hide()
@@ -267,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, let capture else { return }
         guard let agent else {
-            bubble.model.phase = .failed("No Hermes key found. Set BRUH_HERMES_KEY, or write ~/.config/bruh/config.json.")
+            bubble.model.phase = .failed("No Hermes key found. Set BRAH_HERMES_KEY, or write ~/.config/brah/config.json.")
             return
         }
 
@@ -342,7 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func lockScreen(_ locked: Bool) async {
         guard canHoldScreen, let dashboard, locked != holdingScreen else { return }
         do {
-            try await dashboard.holdScreen(locked, reason: "Bruh: the user has not said yes to screen actions yet")
+            try await dashboard.holdScreen(locked, reason: "Brah: the user has not said yes to screen actions yet")
             holdingScreen = locked
         } catch {
             log("screen lock failed: \(error.localizedDescription)")
@@ -403,7 +403,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Stop, end a conversation, and take every Bruh window off the screen.
+    /// Stop, end a conversation, and take every Brah window off the screen.
     func hide() {
         endConversation()
         stop()
@@ -443,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 bubble.show(near: NSEvent.mouseLocation, phase: .failed(problem), typing: false)
                 setHandsFree(false)
             } else {
-                log("listening for \"Hey Bruh\"")
+                log("listening for \"Hey Brah\"")
             }
         }
     }
@@ -485,7 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             guard let turns else {
-                bubble.model.phase = .failed("Bruh has no way to listen for a conversation here.")
+                bubble.model.phase = .failed("Brah has no way to listen for a conversation here.")
                 endConversation()
                 return
             }
@@ -580,7 +580,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Tests
 
     /// `--ask "question"` asks without the hotkey. `--talk 4` listens for four seconds, as a hold
-    /// of the hotkey would. `--converse` starts a hands-free conversation as "Hey Bruh" would.
+    /// of the hotkey would. `--converse` starts a hands-free conversation as "Hey Brah" would.
     private func runTestArguments() {
         let arguments = CommandLine.arguments
         guard arguments.contains("--ask") || arguments.contains("--talk") || arguments.contains("--converse") else { return }
@@ -615,10 +615,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let icon = Bundle.main.image(forResource: "MenuIcon")
-            ?? NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "Bruh")
+            ?? NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "Brah")
         icon?.isTemplate = true
         icon?.size = NSSize(width: 18, height: 18)
-        icon?.accessibilityDescription = "Bruh"
+        icon?.accessibilityDescription = "Brah"
         item.button?.image = icon
 
         let menu = NSMenu()
@@ -626,7 +626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(entry("Stop", shortcut: shortcuts.stop, action: #selector(menuStop)))
         menu.addItem(entry("Hide", shortcut: shortcuts.hide, action: #selector(menuHide)))
         menu.addItem(.separator())
-        let handsFree = entry("Listen for \u{201C}Hey Bruh\u{201D}", shortcut: nil, action: #selector(toggleHandsFree))
+        let handsFree = entry("Listen for \u{201C}Hey Brah\u{201D}", shortcut: nil, action: #selector(toggleHandsFree))
         handsFree.state = handsFreeOn ? .on : .off
         menu.addItem(handsFree)
         handsFreeItem = handsFree
@@ -650,7 +650,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
-        menu.addItem(NSMenuItem(title: "Quit Bruh", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Brah", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         item.menu = menu
         statusItem = item

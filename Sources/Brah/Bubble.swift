@@ -18,7 +18,7 @@ final class BubbleModel: ObservableObject {
     @Published var question = ""
     /// What the agent is doing now ("Clicking Save"), while it works.
     @Published var step: String?
-    /// A hands-free conversation is on: Bruh listens again after each answer.
+    /// A hands-free conversation is on: Brah listens again after each answer.
     @Published var handsFree = false
     @Published var muted = false
     var agentName = "Hermes"
@@ -50,10 +50,10 @@ struct BubbleView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
     }
 
-    /// Bruh's eyes, the sound, and the controls.
+    /// Brah's eyes, the sound, and the controls.
     private var header: some View {
         HStack(spacing: 8) {
-            BruhMark()
+            BrahMark()
             if model.phase == .listening || model.handsFree {
                 Waveform(input: model.phase == .listening)
             } else if case .answer = model.phase, !model.muted {
@@ -161,8 +161,8 @@ private struct Answer: View {
     }
 }
 
-/// Bruh's half-shut eyes, from the menu bar icon.
-private struct BruhMark: View {
+/// Brah's half-shut eyes, from the menu bar icon.
+private struct BrahMark: View {
     private static let image: NSImage? = {
         let image = Bundle.main.image(forResource: "MenuIcon")
         image?.isTemplate = true
@@ -216,7 +216,7 @@ private struct DragArea: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
-/// A panel that takes typing without making Bruh the active app, so the app the user works in
+/// A panel that takes typing without making Brah the active app, so the app the user works in
 /// stays in front.
 private final class BubblePanel: NSPanel {
     var onEscape: () -> Void = {}

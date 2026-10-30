@@ -1,9 +1,9 @@
 import Carbon.HIToolbox
-import BruhCore
+import BrahCore
 import Foundation
 
 /// System-wide hotkeys through Carbon. They need no Accessibility permission and work in the
-/// App Sandbox, so they stay when Bruh moves to the App Store. A hotkey reports both the press
+/// App Sandbox, so they stay when Brah moves to the App Store. A hotkey reports both the press
 /// and the release, which is what hold-to-talk needs.
 enum Hotkeys {
     private struct Actions {
@@ -25,7 +25,7 @@ enum Hotkeys {
         actions[id] = Actions(press: onPress, release: onRelease)
 
         var ref: EventHotKeyRef?
-        let hotKeyID = EventHotKeyID(signature: OSType(0x4252_5548), id: id) // "BRUH"
+        let hotKeyID = EventHotKeyID(signature: OSType(0x4252_5548), id: id) // "BRAH"
         RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &ref)
         refs.append(ref)
     }

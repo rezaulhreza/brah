@@ -1,7 +1,7 @@
 import Foundation
 
 /// The Hermes web backend, which owns the voice. Its audio routes use the speech providers the
-/// user chose in Hermes (Deepgram, ElevenLabs, Edge, local Whisper and others), so Bruh needs no
+/// user chose in Hermes (Deepgram, ElevenLabs, Edge, local Whisper and others), so Brah needs no
 /// speech account of its own.
 public struct HermesVoiceSettings: Equatable, Sendable {
     public var url: URL
@@ -23,21 +23,21 @@ public struct HermesVoiceSettings: Equatable, Sendable {
     /// True when the dashboard runs on this Mac.
     public var isLocal: Bool { CloudflareAccess.isLocal(url) }
 
-    /// The environment first, then `voice` in the `hermes` object of `~/.config/bruh/config.json`:
+    /// The environment first, then `voice` in the `hermes` object of `~/.config/brah/config.json`:
     /// `{"hermes": {"voice": {"url": "...", "username": "...", "password": "..."}}}`.
     /// The password comes from the Keychain before the file (see `Secrets`). `secret` looks up a
     /// Keychain account; nil means the Keychain when `home` is the user's own home folder.
     /// The sign-in is only for a dashboard that asks for one. The Cloudflare Access headers come
     /// from `CloudflareAccess.headers`.
-    public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
+    public static func load(environment: [String: String] = BrahEnvironment.current(),
                             home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             secret: ((String) -> String?)? = nil) -> HermesVoiceSettings {
         let secret = Secrets.lookup(secret, home: home)
         let voice = HermesSettings.configSection(home: home)?["voice"] as? [String: Any]
-        let url = environment["BRUH_HERMES_VOICE_URL"].flatMap(URL.init(string:))
+        let url = environment["BRAH_HERMES_VOICE_URL"].flatMap(URL.init(string:))
             ?? (voice?["url"] as? String).flatMap(URL.init(string:))
-        let username = environment["BRUH_HERMES_USERNAME"] ?? voice?["username"] as? String
-        let password = environment["BRUH_HERMES_PASSWORD"]
+        let username = environment["BRAH_HERMES_USERNAME"] ?? voice?["username"] as? String
+        let password = environment["BRAH_HERMES_PASSWORD"]
             ?? secret(Secrets.voicePassword)
             ?? voice?["password"] as? String
         return HermesVoiceSettings(url: url ?? defaultURL,
@@ -78,7 +78,7 @@ public struct Sound: Equatable, Sendable {
 public actor HermesVoice {
     private let settings: HermesVoiceSettings
     private let session: URLSession
-    /// How the backend let Bruh in: its session token, or a cookie from the password sign-in.
+    /// How the backend let Brah in: its session token, or a cookie from the password sign-in.
     private var token: String?
     private var connected = false
 
@@ -106,7 +106,7 @@ public actor HermesVoice {
 
         guard let username = settings.username, let password = settings.password else {
             throw AgentError.notConfigured(
-                "The Hermes dashboard at \(settings.url.absoluteString) asks for a sign-in. Add hermes.voice.username and hermes.voice.password to ~/.config/bruh/config.json.")
+                "The Hermes dashboard at \(settings.url.absoluteString) asks for a sign-in. Add hermes.voice.username and hermes.voice.password to ~/.config/brah/config.json.")
         }
         let body = ["provider": "basic", "username": username, "password": password, "next": "/"]
         let (data, status) = try await send("auth/password-login", body: body)
@@ -199,7 +199,7 @@ public actor HermesVoice {
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("bruh", forHTTPHeaderField: "X-Requested-With")
+        request.setValue("brah", forHTTPHeaderField: "X-Requested-With")
         settings.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         if let token {
             request.setValue(token, forHTTPHeaderField: "X-Hermes-Session-Token")

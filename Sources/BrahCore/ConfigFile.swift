@@ -1,6 +1,6 @@
 import Foundation
 
-/// Reads and writes `~/.config/bruh/config.json` for the Settings window. A write keeps every key
+/// Reads and writes `~/.config/brah/config.json` for the Settings window. A write keeps every key
 /// that the window does not manage.
 public enum ConfigFile {
     public enum Failure: Error, Equatable, CustomStringConvertible {
@@ -11,19 +11,32 @@ public enum ConfigFile {
 
         public var description: String {
             switch self {
-            case .notJSON: "~/.config/bruh/config.json is not valid JSON. Correct it or remove it, then save again."
-            case .cannotWrite(let reason): "Bruh cannot write ~/.config/bruh/config.json: \(reason)"
+            case .notJSON: "~/.config/brah/config.json is not valid JSON. Correct it or remove it, then save again."
+            case .cannotWrite(let reason): "Brah cannot write ~/.config/brah/config.json: \(reason)"
             }
         }
     }
 
     public static func url(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        home.appendingPathComponent(".config/brah/config.json")
+    }
+
+    /// Where the app kept its settings when it was called Bruh.
+    static func legacyURL(home: URL) -> URL {
         home.appendingPathComponent(".config/bruh/config.json")
+    }
+
+    /// The file to read: the new one, or the old one until the first save writes the new one.
+    public static func readableURL(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        let new = url(home: home)
+        let old = legacyURL(home: home)
+        let files = FileManager.default
+        return !files.fileExists(atPath: new.path) && files.fileExists(atPath: old.path) ? old : new
     }
 
     /// The whole file. Empty when there is no file.
     public static func read(home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> [String: Any] {
-        guard let data = try? Data(contentsOf: url(home: home)) else { return [:] }
+        guard let data = try? Data(contentsOf: readableURL(home: home)) else { return [:] }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.notJSON }
         return json
     }
@@ -71,11 +84,11 @@ public enum ConfigFile {
     }
 }
 
-/// Hands-free mode: Bruh listens for "Hey Bruh", and stops after a time with no talk.
-/// `{"handsFree": {"enabled": true, "idleSeconds": 20}}` in `~/.config/bruh/config.json`.
+/// Hands-free mode: Brah listens for "Hey Brah", and stops after a time with no talk.
+/// `{"handsFree": {"enabled": true, "idleSeconds": 20}}` in `~/.config/brah/config.json`.
 public struct HandsFreeSettings: Equatable, Sendable {
     public var enabled: Bool
-    /// Seconds of quiet before Bruh stops listening. Always in `idleRange`.
+    /// Seconds of quiet before Brah stops listening. Always in `idleRange`.
     public var idleSeconds: Int
 
     public static let idleRange = 10...120
@@ -97,7 +110,7 @@ public struct HandsFreeSettings: Equatable, Sendable {
     }
 }
 
-/// The values of `~/.config/bruh/config.json` that the Settings window changes. The secrets are
+/// The values of `~/.config/brah/config.json` that the Settings window changes. The secrets are
 /// not here: they go to the Keychain (see `Secrets`).
 public struct EditableSettings: Equatable, Sendable {
     /// Empty means the default address.

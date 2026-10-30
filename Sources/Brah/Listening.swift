@@ -1,5 +1,5 @@
 import AVFoundation
-import BruhCore
+import BrahCore
 import Speech
 
 enum SpeechAccess {
@@ -18,8 +18,8 @@ enum ListeningError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notAllowed: return "Bruh needs Speech Recognition for \"Hey Bruh\". Allow it in System Settings > Privacy & Security > Speech Recognition."
-        case .noOnDevice: return "This Mac has no on-device speech recognition for your language, so Bruh cannot listen for \"Hey Bruh\" without sending audio away."
+        case .notAllowed: return "Brah needs Speech Recognition for \"Hey Brah\". Allow it in System Settings > Privacy & Security > Speech Recognition."
+        case .noOnDevice: return "This Mac has no on-device speech recognition for your language, so Brah cannot listen for \"Hey Brah\" without sending audio away."
         }
     }
 }
@@ -43,7 +43,7 @@ private final class RecognitionFeed: @unchecked Sendable {
     }
 }
 
-/// Listens on the Mac for "Hey Bruh". No audio leaves the Mac.
+/// Listens on the Mac for "Hey Brah". No audio leaves the Mac.
 @MainActor
 final class WakeListener {
     private var recognizer: SFSpeechRecognizer?

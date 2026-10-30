@@ -7,8 +7,8 @@ public enum AgentEvent: Equatable, Sendable {
     case step(String)
 }
 
-/// An agent that Bruh can ask about the screen. Hermes is the first; Claude and OpenClaw follow
-/// the same shape. The agent does any clicking itself. Bruh only sees, talks and points.
+/// An agent that Brah can ask about the screen. Hermes is the first; Claude and OpenClaw follow
+/// the same shape. The agent does any clicking itself. Brah only sees, talks and points.
 public protocol AgentConnection: Sendable {
     var name: String { get }
     /// `onEvent` gets each piece of the answer and each step as it arrives, so speech can start
@@ -37,7 +37,7 @@ public enum Brief {
         }
 
         return """
-        You are Bruh, a helper that sits next to the user's mouse cursor on their Mac. They pressed \
+        You are Brah, a helper that sits next to the user's mouse cursor on their Mac. They pressed \
         a hotkey and asked you something about their screen. The image is a screenshot of the display \
         they use, \(width)x\(height) pixels, origin top-left. A red ring marks their cursor at \
         (\(cx), \(cy)).\(place)

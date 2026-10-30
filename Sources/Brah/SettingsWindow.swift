@@ -1,9 +1,9 @@
 import AppKit
-import BruhCore
+import BrahCore
 import SwiftUI
 
 /// The Settings window: the agent, the voice, the shortcuts and hands-free mode. It writes
-/// `~/.config/bruh/config.json` and puts the secrets in the Keychain. The app sets `onSave` to
+/// `~/.config/brah/config.json` and puts the secrets in the Keychain. The app sets `onSave` to
 /// load the settings again.
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
@@ -29,7 +29,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Bruh Settings"
+        window.title = "Brah Settings"
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         // Tall enough for every section, but never taller than the screen.
@@ -140,7 +140,7 @@ final class SettingsModel: ObservableObject {
         guard let shortcut = Shortcut.from(keyCode: keyCode, modifiers: modifiers) else {
             shortcutProblem = (name, Shortcut.knows(keyCode: keyCode)
                 ? "Add ⌃, ⌥, ⇧ or ⌘. Only F1 to F12 work alone."
-                : "Bruh cannot use this key. Use a letter, a digit, Space, an arrow or F1 to F12.")
+                : "Brah cannot use this key. Use a letter, a digit, Space, an arrow or F1 to F12.")
             return true
         }
         if let other = Self.actions.first(where: { $0.0 != name && settings.shortcuts[$0.0]?.sameKeys(as: shortcut) == true }) {
@@ -217,8 +217,8 @@ struct SettingsView: View {
                                 prompt: Text(model.fileHasKey ? "Saved in config.json" : "Not set"))
                     note("Hermes can run on this Mac or on a server, with an http:// or https:// address. "
                          + (model.fileHasKey
-                            ? "With no key here, Bruh uses the key in ~/.config/bruh/config.json."
-                            : "With no key, Bruh reads API_SERVER_KEY from ~/.hermes/.env."))
+                            ? "With no key here, Brah uses the key in ~/.config/brah/config.json."
+                            : "With no key, Brah reads API_SERVER_KEY from ~/.hermes/.env."))
                 }
 
                 Section("Voice") {
@@ -227,13 +227,13 @@ struct SettingsView: View {
                     TextField("Username", text: $model.settings.voiceUsername, prompt: Text("Not set"))
                     SecureField("Password", text: secret(Secrets.voicePassword),
                                 prompt: Text(model.fileHasPassword ? "Saved in config.json" : "Not set"))
-                    note("The username and password are only for a dashboard with a sign-in. With the deepgram-live plugin, Bruh uses your live voice.")
+                    note("The username and password are only for a dashboard with a sign-in. With the deepgram-live plugin, Brah uses your live voice.")
                 }
 
                 Section("Cloudflare Access") {
                     TextField("Access client ID", text: secret(Secrets.accessClientID), prompt: Text("Not set"))
                     SecureField("Access client secret", text: secret(Secrets.accessClientSecret), prompt: Text("Not set"))
-                    note("Only for a server behind Cloudflare Access. Bruh sends this pair to the Hermes address and to the dashboard.")
+                    note("Only for a server behind Cloudflare Access. Brah sends this pair to the Hermes address and to the dashboard.")
                 }
 
                 Section {
@@ -259,7 +259,7 @@ struct SettingsView: View {
                 }
 
                 Section("Hands-free") {
-                    Toggle("Listen for “Hey Bruh”", isOn: $model.settings.handsFree.enabled)
+                    Toggle("Listen for “Hey Brah”", isOn: $model.settings.handsFree.enabled)
                     LabeledContent("Stop after") {
                         HStack {
                             Text("\(model.settings.handsFree.idleSeconds) seconds of quiet")

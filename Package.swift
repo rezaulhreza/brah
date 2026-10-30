@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "Bruh",
+    name: "Brah",
     platforms: [.macOS(.v14)],
     targets: [
-        .target(name: "BruhCore"),
-        .executableTarget(name: "Bruh", dependencies: ["BruhCore"]),
-        .testTarget(name: "BruhCoreTests", dependencies: ["BruhCore"]),
+        .target(name: "BrahCore"),
+        .executableTarget(name: "Brah", dependencies: ["BrahCore"]),
+        .testTarget(name: "BrahCoreTests", dependencies: ["BrahCore"]),
     ]
 )

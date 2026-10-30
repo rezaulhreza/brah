@@ -1,5 +1,5 @@
 import AppKit
-import BruhCore
+import BrahCore
 import ScreenCaptureKit
 
 enum CaptureError: LocalizedError {
@@ -8,14 +8,14 @@ enum CaptureError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noScreen: return "Bruh could not find the screen under the cursor."
+        case .noScreen: return "Brah could not find the screen under the cursor."
         case .noPermission:
-            return "Bruh needs Screen Recording. Open System Settings > Privacy & Security > Screen Recording, turn on Bruh, then open Bruh again."
+            return "Brah needs Screen Recording. Open System Settings > Privacy & Security > Screen Recording, turn on Brah, then open Brah again."
         }
     }
 }
 
-/// Takes the screenshot the agent sees: the display under the cursor, without Bruh's own windows,
+/// Takes the screenshot the agent sees: the display under the cursor, without Brah's own windows,
 /// with a red ring where the cursor is.
 @MainActor
 enum Capture {
@@ -52,8 +52,8 @@ enum Capture {
         let size = CGSize(width: image.width, height: image.height)
 
         let data = jpeg(marking(image, at: cursor))
-        // BRUH_SNAPSHOT_PATH saves the exact picture the agent gets, to check what it sees.
-        if let path = ProcessInfo.processInfo.environment["BRUH_SNAPSHOT_PATH"] {
+        // BRAH_SNAPSHOT_PATH saves the exact picture the agent gets, to check what it sees.
+        if let path = ProcessInfo.processInfo.environment["BRAH_SNAPSHOT_PATH"] {
             try? data.write(to: URL(fileURLWithPath: path))
         }
         return Snapshot(jpeg: data, imageSize: size, screenFrame: frame, scale: scale,

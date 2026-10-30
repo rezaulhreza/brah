@@ -10,7 +10,7 @@ public enum TurnEvent: Equatable, Sendable {
     case ended(String)
 }
 
-/// The words Bruh listens for. Every match is on the whole utterance, so "stop" inside a longer
+/// The words Brah listens for. Every match is on the whole utterance, so "stop" inside a longer
 /// sentence is a question, not a command.
 public enum Phrases {
     private static let stop: Set<String> = [
@@ -19,7 +19,7 @@ public enum Phrases {
     ]
     private static let name = try! Regex(#"(?i)\bbruh\b"#)
 
-    /// Text for a voice to say. "Bruh" is said "Brah"; a voice reading the spelling says "brooh".
+    /// Text for a voice to say. The old spelling "Bruh" is said "Brah", not "brooh".
     public static func spoken(_ text: String) -> String {
         text.replacing(name, with: "Brah")
     }
@@ -48,15 +48,15 @@ public enum Phrases {
         return nil
     }
 
-    /// "Hey Bruh", also as speech recognition tends to spell it ("hey bro", "a bruh").
+    /// "Hey Brah", also as speech recognition tends to spell it ("hey bra", "hey bro", "a bruh").
     public static func hasWakeWord(_ text: String) -> Bool {
         normalise(text).firstMatch(of: wake) != nil
     }
 }
 
-/// Speakers next to a microphone: the user's words and Bruh's own voice arrive together. Echo
+/// Speakers next to a microphone: the user's words and Brah's own voice arrive together. Echo
 /// cancellation removes most of the voice; this catches what is left, by the words. A transcript
-/// that is mostly words Bruh said in the last 20 seconds is the voice, not the user.
+/// that is mostly words Brah said in the last 20 seconds is the voice, not the user.
 public struct EchoGuard: Sendable {
     private var said: [(at: Date, words: Set<String>)] = []
     public static let memory: TimeInterval = 20

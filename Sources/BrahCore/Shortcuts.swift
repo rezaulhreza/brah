@@ -108,8 +108,8 @@ public struct Shortcut: Equatable, Sendable {
     }
 }
 
-/// Bruh's global shortcuts. Each one can be changed in the Settings window or in
-/// `~/.config/bruh/config.json`:
+/// Brah's global shortcuts. Each one can be changed in the Settings window or in
+/// `~/.config/brah/config.json`:
 /// `{"shortcuts": {"talk": "ctrl+option+space", "stop": "ctrl+option+.", "mute": "ctrl+option+m",
 /// "hide": "ctrl+option+h", "handsFree": "ctrl+option+j"}}`
 public struct Shortcuts: Equatable, Sendable {
@@ -117,7 +117,7 @@ public struct Shortcuts: Equatable, Sendable {
     public var stop: Shortcut
     public var mute: Shortcut
     public var hide: Shortcut
-    /// Turns the "Hey Bruh" wake word on and off.
+    /// Turns the "Hey Brah" wake word on and off.
     public var handsFree: Shortcut
 
     public init(talk: Shortcut, stop: Shortcut, mute: Shortcut, hide: Shortcut, handsFree: Shortcut) {
@@ -209,10 +209,10 @@ public struct Shortcuts: Equatable, Sendable {
     }
 }
 
-/// `~/.config/bruh/config.json`.
+/// `~/.config/brah/config.json`.
 public enum Config {
     public static func json(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: ConfigFile.url(home: home)) else { return nil }
+        guard let data = try? Data(contentsOf: ConfigFile.readableURL(home: home)) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }

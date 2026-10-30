@@ -1,7 +1,7 @@
 import Foundation
 
 /// The `deepgram-live` Hermes plugin: the live voice the user chose for Hermes. The plugin keeps
-/// the Deepgram key on the host and hands out tokens that last 30 seconds. Bruh then talks to
+/// the Deepgram key on the host and hands out tokens that last 30 seconds. Brah then talks to
 /// Deepgram directly, the same way the Hermes desktop app does, with the user's voice and models.
 public struct DeepgramLiveSettings: Equatable, Sendable {
     public var voice: String
@@ -97,7 +97,7 @@ public final class DeepgramSpeech: SpeechStream, @unchecked Sendable {
     private let socket: URLSessionWebSocketTask
     private let onEvent: @Sendable (SpeechEvent) -> Void
     private let lock = NSLock()
-    private let queue = DispatchQueue(label: "bruh.deepgram.speak")
+    private let queue = DispatchQueue(label: "brah.deepgram.speak")
     private var pending = ""
     private var unflushed = false
     private var lastFlush = Date.distantPast

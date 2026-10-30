@@ -2,8 +2,8 @@ import AVFoundation
 
 /// One audio engine for the microphone and the voice. With both in one engine, the Mac's voice
 /// processing knows what the speakers play and takes it out of the microphone (echo
-/// cancellation), so Bruh does not hear itself. The engine runs only while something uses it, so
-/// the microphone light is off when Bruh is idle.
+/// cancellation), so Brah does not hear itself. The engine runs only while something uses it, so
+/// the microphone light is off when Brah is idle.
 final class AudioIO: @unchecked Sendable {
     static let shared = AudioIO()
 

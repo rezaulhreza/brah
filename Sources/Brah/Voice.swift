@@ -1,5 +1,5 @@
 import AVFoundation
-import BruhCore
+import BrahCore
 import Speech
 
 /// Records the microphone as 16 kHz mono, the rate speech providers expect, from the shared
@@ -78,12 +78,12 @@ final class Voice {
         AudioIO.shared.onDrained = { [weak self] in MainActor.assumeIsolated { self?.drained() } }
     }
 
-    /// Bruh is talking, or about to.
+    /// Brah is talking, or about to.
     var isSpeaking: Bool {
         AudioIO.shared.isPlaying || system.isSpeaking || player?.isPlaying == true || (reply?.isOpen ?? false)
     }
 
-    /// The words are Bruh's own voice coming back through the microphone.
+    /// The words are Brah's own voice coming back through the microphone.
     func isEcho(_ transcript: String) -> Bool {
         echo.isEcho(transcript)
     }
@@ -358,7 +358,7 @@ enum MacSpeech {
 
         var errorDescription: String? {
             switch self {
-            case .notAllowed: return "Bruh needs Speech Recognition. Allow it in System Settings > Privacy & Security > Speech Recognition."
+            case .notAllowed: return "Brah needs Speech Recognition. Allow it in System Settings > Privacy & Security > Speech Recognition."
             case .unavailable: return "Speech recognition of the Mac is not available now."
             }
         }
@@ -369,7 +369,7 @@ enum MacSpeech {
         guard status == .authorized else { throw Failure.notAllowed }
         guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else { throw Failure.unavailable }
 
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("bruh-\(UUID().uuidString).wav")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("brah-\(UUID().uuidString).wav")
         try wav.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
 
