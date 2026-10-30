@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Brah's icon: a cursor giving you the side-eye"></p>
+
 # Brah
 
 > **Ho, brah.** Your mate next to the cursor.
@@ -29,6 +31,8 @@ Fake app, fake bills, fake people. Real Brah.
 | **Working.** Every step shows, so you know what it is up to. | **Asking first.** Nothing gets clicked until you say so. Brah has manners. |
 | ![A hands-free conversation](docs/screenshots/handsfree.png) | ![The Settings window](docs/screenshots/settings.png) |
 | **Hands-free.** "Hey Brah", then just talk. "Bye" when you are done. | **Settings.** Your agent, your voice, your keys. Secrets go in the Keychain. |
+| ![Brah's cursor shows the next click](docs/screenshots/guide.png) | ![Happy eyes when the job is done](docs/screenshots/done.png) |
+| **Show me.** Brah's own cursor flies to the next click and waits. Click it, and Brah finds the next one. Or hit **Do it for me**. | **Done.** Happy eyes. Keep Brah waiting too long and you get the side-eye. |
 
 ## What it does
 
@@ -40,8 +44,14 @@ Fake app, fake bills, fake people. Real Brah.
   "Hey Brah".
 - **Talks back.** The answer streams in, and the voice starts on the first sentence. Echo
   cancellation stops Brah from hearing itself, which is more than some people manage.
-- **Points.** A ring and a label land on the exact spot. No more "top right. No, the other top
-  right."
+- **Points, with its own cursor.** A yellow Brah cursor flies from your pointer to the exact spot,
+  leaves a short trail so you can follow it, and pulses there with a label. No more "top right.
+  No, the other top right."
+- **Shows you, step by step.** Ask how to do something. Brah's cursor goes to the first click and
+  waits. You click, Brah looks again and goes to the next one, until the job is done. Bored of
+  clicking? **Do it for me** hands the rest to the agent, after your yes.
+- **Has moods.** Its eyes listen wide open, look up when it thinks, scan while it works, go happy
+  when it is done, and give you the flat "bruh" side-eye when you keep it waiting or stop it.
 - **Does it for you, after a yes.** Ask it to do something on the screen. The agent says what it
   will do and waits. Click **Allow** or say "yes". Until then, its screen tools are locked. Every
   step shows in the bubble, and Stop locks them again at once.
