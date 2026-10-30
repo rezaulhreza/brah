@@ -54,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var demoStage: NSPanel?
     /// Watches clicks in other apps while a "show me" guide waits for the user.
     private var clickWatch: Any?
+    /// Where the current step is, in AppKit screen coordinates.
+    private var guideTarget: CGPoint?
     private var pointerHide: DispatchWorkItem?
     /// Screen actions only make sense for an agent on this Mac: a Hermes on a server would click
     /// on the server.
@@ -389,17 +391,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log("guide step \(bubble.model.guideStep ?? 0): \(step.label)")
         pointerHide?.cancel()
         cursor.mood = nil
-        cursor.show(at: snapshot.viewPoint(step), label: step.label, on: snapshot.screenFrame)
+        let place = snapshot.viewPoint(step)
+        cursor.show(at: place, label: step.label, on: snapshot.screenFrame)
+        // The target in AppKit screen coordinates, for the click test.
+        guideTarget = CGPoint(x: snapshot.screenFrame.minX + place.x, y: snapshot.screenFrame.maxY - place.y)
         if clickWatch == nil {
             // Clicks in other apps only: a click on Brah's own bubble is not a step.
-            clickWatch = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.userClicked() } }
+            clickWatch = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                let at = NSEvent.mouseLocation
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.userClicked(at: at) } }
             }
         }
     }
 
-    private func userClicked() {
-        guard bubble.model.guideStep != nil, work == nil, !awaitingApproval else { return }
+    /// How near the target a click must be to count as the step. The agent's x and y can be a
+    /// little off, and so can the user.
+    private static let clickRadius: CGFloat = 70
+
+    private func userClicked(at point: CGPoint) {
+        guard bubble.model.guideStep != nil, work == nil, !awaitingApproval, let guideTarget else { return }
+        // A click somewhere else is the user doing other things, not this step.
+        guard hypot(point.x - guideTarget.x, point.y - guideTarget.y) <= Self.clickRadius else { return }
         log("guide: the user clicked")
         cursor.mood = .thinking
         Task {
@@ -450,6 +462,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(clickWatch)
         }
         clickWatch = nil
+        guideTarget = nil
     }
 
     /// One place, with no guide: the cursor flies there and leaves after a while.

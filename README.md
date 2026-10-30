@@ -48,7 +48,8 @@ Fake app, fake bills, fake people. Real Brah.
   leaves a short trail so you can follow it, and pulses there with a label. No more "top right.
   No, the other top right."
 - **Shows you, step by step.** Ask how to do something. Brah's cursor goes to the first click and
-  waits. You click, Brah looks again and goes to the next one, until the job is done. Bored of
+  waits. You click there, Brah looks again and goes to the next one, until the job is done. Clicks
+  somewhere else do not count, so you can carry on with other things. Bored of
   clicking? **Do it for me** hands the rest to the agent, after your yes.
 - **Has moods.** Its eyes listen wide open, look up when it thinks, scan while it works, go happy
   when it is done, and give you the flat "bruh" side-eye when you keep it waiting or stop it.
