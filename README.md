@@ -7,6 +7,21 @@ the place. Ask it to do something, and it does it after your yes.
 Brah sees, listens, talks and points. The agent you connect does the thinking and the clicking.
 Hermes is the first agent. Claude and OpenClaw come next.
 
+![Brah answers out loud and points at the Export button](docs/screenshots/answer.png)
+
+## In pictures
+
+The app and the data in these pictures are made up.
+
+| | |
+|---|---|
+| ![Listening while the hotkey is held](docs/screenshots/listening.png) | ![A typed question](docs/screenshots/typing.png) |
+| **Listening.** Hold the hotkey and talk. Your words show while you talk. | **Typing.** Tap the hotkey to type instead. |
+| ![The agent at work](docs/screenshots/thinking.png) | ![The agent asks before it acts](docs/screenshots/approval.png) |
+| **Working.** Each step the agent takes shows in the bubble. | **Asking first.** Nothing happens on the screen until you allow it. |
+| ![A hands-free conversation](docs/screenshots/handsfree.png) | ![The Settings window](docs/screenshots/settings.png) |
+| **Hands-free.** After "Hey Brah", talk without the hotkey. Say "bye" to end. | **Settings.** The agent, the voice, Cloudflare Access and the shortcuts. |
+
 ## What it does
 
 - **Sees your screen.** A screenshot of the display under the cursor, with the cursor marked,
@@ -162,6 +177,10 @@ build/Brah.app/Contents/MacOS/Brah --ask "Where is the search field?"
 build/Brah.app/Contents/MacOS/Brah --talk 5
 build/Brah.app/Contents/MacOS/Brah --converse
 ```
+
+`scripts/screenshots.sh` makes the pictures in `docs/screenshots` again. It runs
+`Brah --demo <state>`, which draws a made-up app behind the real bubble, so no real screen gets
+into a picture.
 
 `--converse` starts a hands-free conversation as "Hey Brah" does. `--ask "..." --yes` says yes
 once when the agent asks to act, as a click on Allow would. `BRAH_SNAPSHOT_PATH=/tmp/s.jpg`
