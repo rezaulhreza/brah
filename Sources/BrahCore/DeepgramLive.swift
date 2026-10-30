@@ -158,7 +158,7 @@ public final class DeepgramSpeech: SpeechStream, @unchecked Sendable {
     }
 
     private func speak(_ text: String) {
-        let line = Phrases.spoken(text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
         var start = line.startIndex
         while start < line.endIndex {

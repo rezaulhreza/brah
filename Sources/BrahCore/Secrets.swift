@@ -4,8 +4,6 @@ import Security
 /// Brah's secrets in the login Keychain: generic passwords with the service "Brah".
 public enum Secrets {
     public static let service = "Brah"
-    /// The service of the secrets saved when the app was called Bruh. Read, never written.
-    static let legacyService = "Bruh"
     /// The Hermes API key.
     public static let hermesKey = "hermes.key"
     /// The password of the Hermes dashboard, for a dashboard with a sign-in.
@@ -25,11 +23,7 @@ public enum Secrets {
 
     /// The secret, or nil when there is none or it is empty.
     public static func get(_ account: String) -> String? {
-        read(account, service: service) ?? read(account, service: legacyService)
-    }
-
-    private static func read(_ account: String, service: String) -> String? {
-        var query = baseQuery(account, service: service)
+        var query = baseQuery(account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
@@ -56,13 +50,10 @@ public enum Secrets {
         }
     }
 
-    /// Removes the secret, also an old one from when the app was called Bruh, so a cleared field
-    /// stays cleared. No secret is not an error.
+    /// Removes the secret. No secret is not an error.
     public static func delete(_ account: String) throws {
-        for name in [service, legacyService] {
-            let status = SecItemDelete(baseQuery(account, service: name) as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure(status: status) }
-        }
+        let status = SecItemDelete(baseQuery(account) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure(status: status) }
     }
 
     /// The secret lookup of the settings loaders when none is given: the Keychain, but only for
@@ -74,7 +65,7 @@ public enum Secrets {
         return home.standardizedFileURL == real ? { get($0) } : { _ in nil }
     }
 
-    private static func baseQuery(_ account: String, service: String = service) -> [String: Any] {
+    private static func baseQuery(_ account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

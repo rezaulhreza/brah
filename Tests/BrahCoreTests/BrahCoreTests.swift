@@ -213,7 +213,7 @@ final class ShortcutTests: XCTestCase {
 final class DeepgramLiveTests: XCTestCase {
     private let status: [String: Any] = [
         "available": true, "voice": "aura-2-thalia-en", "listen_model": "flux-general-en", "eot_threshold": 0.7,
-        "eot_timeout_ms": 3000, "speed": 1.1, "keyterms": ["Hermes", "Bruh"], "mip_opt_out": true,
+        "eot_timeout_ms": 3000, "speed": 1.1, "keyterms": ["Hermes", "Brah"], "mip_opt_out": true,
     ]
 
     func testSettingsNeedAWorkingPlugin() {
@@ -237,7 +237,7 @@ final class DeepgramLiveTests: XCTestCase {
         XCTAssertTrue(url.hasPrefix("wss://api.deepgram.com/v2/listen?"))
         XCTAssertTrue(url.contains("model=flux-general-en"))
         XCTAssertTrue(url.contains("sample_rate=16000"))
-        XCTAssertTrue(url.contains("keyterm=Hermes&keyterm=Bruh"))
+        XCTAssertTrue(url.contains("keyterm=Hermes&keyterm=Brah"))
     }
 
     func testSentenceSplit() {
@@ -291,7 +291,8 @@ final class ConversationTests: XCTestCase {
     }
 
     func testWakeWordAsRecognitionSpellsIt() {
-        XCTAssertTrue(Phrases.hasWakeWord("Hey Bruh"))
+        XCTAssertTrue(Phrases.hasWakeWord("Hey Brah"))
+        XCTAssertTrue(Phrases.hasWakeWord("hey bra"))
         XCTAssertTrue(Phrases.hasWakeWord("hey bro what is this"))
         XCTAssertTrue(Phrases.hasWakeWord("okay, bruh."))
         XCTAssertFalse(Phrases.hasWakeWord("my brother"))
@@ -308,10 +309,8 @@ final class ConversationTests: XCTestCase {
     }
 }
 
-final class PronunciationTests: XCTestCase {
-    func testBruhIsSaidBrah() {
-        XCTAssertEqual(Phrases.spoken("Hello, Bruh here. BRUH!"), "Hello, Brah here. Brah!")
-        XCTAssertEqual(Phrases.spoken("Bruhs and brush stay"), "Bruhs and brush stay")
+final class BrahPhraseTests: XCTestCase {
+    func testBrahPhrases() {
         XCTAssertTrue(Phrases.isStop("Bye, brah."))
         XCTAssertTrue(Phrases.hasWakeWord("hey brah"))
     }
@@ -542,22 +541,3 @@ final class BriefTests: XCTestCase {
     }
 }
 
-final class RenameTests: XCTestCase {
-    func testOldEnvironmentNamesStillWork() {
-        let env = BrahEnvironment.current(["BRUH_HERMES_KEY": "old", "BRUH_HERMES_URL": "http://a:1", "BRAH_HERMES_URL": "http://b:2"])
-        XCTAssertEqual(env["BRAH_HERMES_KEY"], "old")
-        XCTAssertEqual(env["BRAH_HERMES_URL"], "http://b:2", "a new name wins over an old one")
-    }
-
-    func testOldConfigFileIsReadUntilTheNewOneExists() throws {
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: home.appendingPathComponent(".config/bruh"), withIntermediateDirectories: true)
-        try #"{"shortcuts": {"talk": "cmd+shift+space"}}"#
-            .write(to: home.appendingPathComponent(".config/bruh/config.json"), atomically: true, encoding: .utf8)
-        XCTAssertEqual(Shortcuts.load(home: home).0.talk.display, "⇧⌘Space")
-
-        try ConfigFile.write(["shortcuts": ["talk": "ctrl+option+k"]], home: home)
-        XCTAssertEqual(ConfigFile.readableURL(home: home), ConfigFile.url(home: home))
-        XCTAssertEqual(Shortcuts.load(home: home).0.talk.display, "⌃⌥K")
-    }
-}

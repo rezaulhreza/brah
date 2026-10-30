@@ -17,12 +17,6 @@ public enum Phrases {
         "stop", "stop listening", "goodbye", "good bye", "bye", "bye bye", "bye bruh", "bye brah", "bye bra", "bye bro",
         "thats all", "that is all", "end voice chat", "go to sleep", "never mind", "nevermind",
     ]
-    private static let name = try! Regex(#"(?i)\bbruh\b"#)
-
-    /// Text for a voice to say. The old spelling "Bruh" is said "Brah", not "brooh".
-    public static func spoken(_ text: String) -> String {
-        text.replacing(name, with: "Brah")
-    }
     private static let approve: Set<String> = [
         "yes", "yeah", "yep", "yes please", "approve", "approved", "go ahead", "yes go ahead", "do it", "yes do it",
         "go on", "ok", "okay", "ok go ahead", "okay go ahead", "sure", "allow", "allow it",

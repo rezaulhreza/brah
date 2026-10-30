@@ -100,7 +100,7 @@ public final class LiveSpeech: SpeechStream, @unchecked Sendable {
     }
 
     public func feed(_ text: String) {
-        guard !text.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["text": Phrases.spoken(text)]) else { return }
+        guard !text.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["text": text]) else { return }
         socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
     }
 

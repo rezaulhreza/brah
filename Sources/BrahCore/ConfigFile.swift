@@ -21,22 +21,9 @@ public enum ConfigFile {
         home.appendingPathComponent(".config/brah/config.json")
     }
 
-    /// Where the app kept its settings when it was called Bruh.
-    static func legacyURL(home: URL) -> URL {
-        home.appendingPathComponent(".config/bruh/config.json")
-    }
-
-    /// The file to read: the new one, or the old one until the first save writes the new one.
-    public static func readableURL(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
-        let new = url(home: home)
-        let old = legacyURL(home: home)
-        let files = FileManager.default
-        return !files.fileExists(atPath: new.path) && files.fileExists(atPath: old.path) ? old : new
-    }
-
     /// The whole file. Empty when there is no file.
     public static func read(home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> [String: Any] {
-        guard let data = try? Data(contentsOf: readableURL(home: home)) else { return [:] }
+        guard let data = try? Data(contentsOf: url(home: home)) else { return [:] }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.notJSON }
         return json
     }

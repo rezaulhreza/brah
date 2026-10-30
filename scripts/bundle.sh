@@ -8,7 +8,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 config="${1:-release}"
-identity="${BRAH_SIGN_IDENTITY:-${BRUH_SIGN_IDENTITY:--}}"
+identity="${BRAH_SIGN_IDENTITY:--}"
 bundle_id="${BRAH_BUNDLE_ID:-local.brah.app}"
 
 swift build -c "$config"

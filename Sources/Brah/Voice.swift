@@ -259,7 +259,7 @@ final class Voice {
         speaking = Task {
             if let hermes {
                 do {
-                    let sound = try await hermes.speak(Phrases.spoken(text))
+                    let sound = try await hermes.speak(text)
                     guard !Task.isCancelled else { return }
                     let player = try AVAudioPlayer(data: sound.data)
                     if player.play() {
@@ -280,7 +280,7 @@ final class Voice {
 
     private func sayWithMac(_ text: String) {
         echo.spoke(text)
-        let utterance = AVSpeechUtterance(string: Phrases.spoken(text))
+        let utterance = AVSpeechUtterance(string: text)
         utterance.voice = Self.bestMacVoice
         system.speak(utterance)
     }

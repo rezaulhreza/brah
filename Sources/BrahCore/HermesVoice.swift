@@ -29,7 +29,7 @@ public struct HermesVoiceSettings: Equatable, Sendable {
     /// Keychain account; nil means the Keychain when `home` is the user's own home folder.
     /// The sign-in is only for a dashboard that asks for one. The Cloudflare Access headers come
     /// from `CloudflareAccess.headers`.
-    public static func load(environment: [String: String] = BrahEnvironment.current(),
+    public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
                             home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             secret: ((String) -> String?)? = nil) -> HermesVoiceSettings {
         let secret = Secrets.lookup(secret, home: home)

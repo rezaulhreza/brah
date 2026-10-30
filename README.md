@@ -51,9 +51,6 @@ On the first run, allow Brah in System Settings > Privacy & Security for Screen 
 Microphone and Speech Recognition, then open Brah again. Without `BRAH_SIGN_IDENTITY` the app is
 signed ad hoc, and macOS asks for Screen Recording again after each build.
 
-Brah was called Bruh. It still reads `~/.config/bruh/config.json`, the old Keychain items and the
-old `BRUH_*` environment names, until you save in Settings.
-
 | Key | Action |
 |---|---|
 | Hold ⌃⌥Space | Talk. Release to send |
