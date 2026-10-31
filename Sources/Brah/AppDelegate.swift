@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tools: ToolServerAddress?
     /// A risky screen action waits here for the user's answer.
     private var pendingAction: CheckedContinuation<ScreenActions.Approval, Never>?
+    private var touring = false
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -206,6 +207,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble.model.phase = .approval("Can I \(action)?")
         bubble.model.canAlwaysAllow = true
         if speaks { voice.say("Can I \(action)?") }
+        if touring {
+            bubble.model.phase = .approval("Can I \(action)? The tour says yes in 3 seconds.")
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                answerAction(.allow)
+            }
+        }
         let answer = await withCheckedContinuation { pendingAction = $0 }
         bubble.model.canAlwaysAllow = false
         if work != nil { bubble.model.phase = .thinking }
@@ -611,6 +619,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Stop listening, stop the agent and stop talking. The bubble stays, so the user sees that
     /// it stopped. A hands-free conversation goes on listening.
     func stop() {
+        touring = false
         marks.hide()
         answerAction(.deny)
         actions.cancel()
@@ -1036,5 +1045,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func newConversation() {
         Task { await agent?.reset() }
+    }
+}
+
+// MARK: Tour
+
+extension AppDelegate {
+    /// The questions of the hands-free tour of `demo/benchmark.html`. They live here, not in the
+    /// page, so a web page cannot give Brah instructions.
+    static let tour = [
+        "What is this page? Show me its main parts.",
+        "Which month had the highest revenue? Show me on the chart.",
+        "Switch the date range to Last 90 days.",
+        "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
+        "Create a campaign named Winter Push for trial users, and launch it.",
+        "Find order 1024 and send its invoice.",
+    ]
+
+    /// `brah://tour` from the benchmark page's "Watch Brah do it" button.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { $0.scheme == "brah" && $0.host == "tour" }), !touring else { return }
+        Task { await runTour() }
+    }
+
+    private func runTour() async {
+        touring = true
+        defer { touring = false }
+        try? await Task.sleep(for: .seconds(1.5))
+        // Only on the benchmark page: on any other screen the fixed steps could do real things.
+        guard let first = try? await Capture.snapshot(), first.windowTitle?.contains("Brah benchmark") == true else {
+            log("tour: refused, the front window is not the Brah benchmark page")
+            return
+        }
+        log("tour: start")
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let corner = screen.map { CGPoint(x: $0.visibleFrame.maxX - 380, y: $0.visibleFrame.minY + 260) } ?? NSEvent.mouseLocation
+        for question in Self.tour {
+            guard touring else { return }
+            capture = Task { try await Capture.snapshot() }
+            bubble.show(near: corner, phase: .thinking, typing: false)
+            bubble.model.question = question
+            log("tour: \(question)")
+            submit(question)
+            while touring, work != nil || pendingAction != nil || voice.isSpeaking {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            try? await Task.sleep(for: .seconds(2.5))
+        }
+        log("tour: done")
     }
 }

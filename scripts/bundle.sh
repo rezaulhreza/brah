@@ -33,6 +33,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array><dict>
+    <key>CFBundleURLName</key><string>${bundle_id}</string>
+    <key>CFBundleURLSchemes</key><array><string>brah</string></array>
+  </dict></array>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>Brah listens while you hold the hotkey, so you can ask by voice.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Brah writes down what you say when your agent has no voice of its own.</string>
