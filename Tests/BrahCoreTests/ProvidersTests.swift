@@ -174,6 +174,12 @@ final class SpeechTests: XCTestCase {
         XCTAssertTrue(SpeechSettings.deepgramVoices.contains { $0.id == "aura-2-athena-en" })
     }
 
+    func testOwnDeepgramKeyStaysOutOfTraining() {
+        let settings = DeepgramLiveSettings(voice: "aura-2-athena-en")
+        XCTAssertTrue(settings.speakURL().absoluteString.contains("mip_opt_out=true"))
+        XCTAssertTrue(settings.listenURL(sampleRate: 16000).absoluteString.contains("mip_opt_out=true"))
+    }
+
     func testGroqRequestAndPieces() throws {
         let request = GroqSpeech.request("Hi.", voice: "troy", key: "k")
         XCTAssertEqual(request.url?.absoluteString, "https://api.groq.com/openai/v1/audio/speech")
