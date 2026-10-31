@@ -1,0 +1,1514 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brah benchmark · Northwind Supply</title>
+<!--
+  Brah benchmark: a fake analytics app for manual tests of a screen-reading,
+  clicking and typing assistant. All data is fictional. No network requests.
+-->
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#fff; --border:#e2e5ea; --border-strong:#ccd2da;
+  --text:#1b1f24; --muted:#59616c; --faint:#8a929c;
+  --accent:#2457c5; --accent-hover:#1d49a8; --accent-weak:#e9effb;
+  --ok:#1d7a4f; --ok-weak:#e5f3eb; --warn:#9a5800; --warn-weak:#fcf0dc; --bad:#b42318; --bad-weak:#fcebe9;
+  --radius:10px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1{font-size:22px;line-height:1.25;margin:0 0 4px;font-weight:650}
+h2{font-size:15px;margin:0;font-weight:600}
+h3{font-size:14px;margin:0 0 8px;font-weight:600}
+p{margin:0 0 10px}
+.muted{color:var(--muted)} .small{font-size:12.5px} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.spacer{flex:1}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+a.btn.primary:hover{background:var(--accent-hover)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* Shell */
+.app{display:grid;grid-template-columns:232px 1fr;height:100vh}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;min-height:0}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px}
+.brand-mark{width:32px;height:32px;border-radius:8px;background:var(--text);color:#fff;display:grid;place-items:center;font-weight:700}
+.brand-name{font-weight:650}
+.brand-sub{font-size:12px;color:var(--muted)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border:0;background:none;border-radius:7px;text-align:left;cursor:pointer;color:var(--muted);font-weight:500}
+.nav button:hover{background:#f0f2f5;color:var(--text)}
+.nav button[aria-current=page]{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.side-foot{margin-top:auto;border-top:1px solid var(--border);padding:14px 8px 4px;font-size:12.5px;color:var(--muted)}
+.side-foot strong{display:block;color:var(--text);font-size:13px}
+.main{display:flex;flex-direction:column;min-width:0;height:100vh}
+.topbar{height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.search{display:flex;align-items:center;gap:8px}
+.search label{font-weight:600;color:var(--muted)}
+.search .input{width:300px}
+.content{flex:1;overflow:auto;padding:24px 28px 120px}
+.content:focus{outline:none}
+
+/* Controls */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:7px;border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;font-weight:500;white-space:nowrap;text-decoration:none}
+.btn:hover{background:#f2f4f7}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.danger:hover{background:#951d14}
+.btn.danger-outline{color:var(--bad);border-color:#e6b3ad}
+.btn.danger-outline:hover{background:var(--bad-weak)}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover{background:#eef1f5}
+.btn.sm{height:32px;padding:0 11px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.current{background:var(--text);border-color:var(--text);color:#fff}
+.count{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:99px;background:#eef0f3;color:var(--muted);font-size:12px;font-weight:600}
+.input{height:38px;padding:0 12px;border:1px solid var(--border-strong);border-radius:7px;background:#fff;min-width:0}
+.input.sm{height:32px;padding:0 10px;font-size:13px}
+.input:focus{border-color:var(--accent)}
+.input[aria-invalid=true]{border-color:var(--bad);background:#fffafa}
+textarea.input{height:auto;padding:10px 12px;resize:vertical;line-height:1.45}
+select.input{padding-right:8px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.field > label,legend{font-weight:600;font-size:13.5px}
+.hint{color:var(--muted);font-size:12.5px}
+.err{color:var(--bad);font-size:13px;font-weight:500}
+fieldset{border:0;padding:0;margin:0 0 16px;min-width:0}
+legend{padding:0;margin-bottom:8px}
+.check{display:flex;align-items:center;gap:10px;min-height:40px;padding:6px 12px;border:1px solid var(--border);border-radius:7px;cursor:pointer;background:#fff}
+.check:hover{border-color:var(--border-strong)}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
+.check .sub{margin-left:auto;color:var(--muted);font-size:12.5px}
+.choices{display:grid;gap:8px}
+.choices.cols-3{grid-template-columns:repeat(3,1fr)}
+.choices.cols-2{grid-template-columns:repeat(2,1fr)}
+.switch-row{display:flex;align-items:center;gap:12px;min-height:44px;border-bottom:1px solid var(--border);cursor:pointer}
+.switch-row:last-child{border-bottom:0}
+.switch-row .lbl{flex:1}
+.switch{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:99px;background:#c9cfd8;position:relative;cursor:pointer;margin:0;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.switch:checked{background:var(--accent)}
+.switch:checked::after{left:19px}
+.switch + .state{width:28px;font-size:12.5px;color:var(--muted)}
+.switch + .state::before{content:"Off"}
+.switch:checked + .state::before{content:"On"}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+
+/* Layout */
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.page-actions{display:flex;gap:8px;align-items:center}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+.card + .card{margin-top:16px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.grid-2-1{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;margin-top:16px}
+.grid-1-1{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.mt{margin-top:16px}
+.no-match{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--border-strong);border-radius:var(--radius);background:#fff}
+
+/* KPI */
+.kpi-label{color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
+.kpi-value{font-size:27px;font-weight:650;margin:6px 0 4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.delta{font-size:13px;font-weight:600}
+.delta.good{color:var(--ok)} .delta.bad{color:var(--bad)}
+.delta .muted{font-weight:400}
+.info-dot{width:16px;height:16px;border-radius:50%;border:1px solid var(--faint);background:#fff;color:var(--muted);font-size:10px;font-weight:700;line-height:1;padding:0;cursor:help;display:inline-grid;place-items:center;font-style:italic;font-family:Georgia,serif}
+
+/* Segmented, tabs, chips */
+.seg-wrap{display:flex;align-items:center;gap:8px}
+.seg-label{font-size:13px;color:var(--muted);font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:7px;overflow:hidden}
+.seg button{height:32px;padding:0 13px;border:0;background:#fff;cursor:pointer;border-right:1px solid var(--border-strong);font-weight:500}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:#f2f4f7}
+.seg button[aria-pressed=true]{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tabs button{height:42px;padding:0 16px;border:0;background:none;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.chip{height:34px;padding:0 14px;border-radius:99px;border:1px solid var(--border-strong);background:#fff;cursor:pointer;font-weight:500}
+.chip:hover{background:#f2f4f7}
+.chip[aria-pressed=true]{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* Tables */
+.table{width:100%;border-collapse:collapse}
+.table th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;padding:0 12px;height:42px;border-bottom:1px solid var(--border);white-space:nowrap}
+.table td{padding:0 12px;height:48px;border-bottom:1px solid var(--border)}
+.table tbody tr:last-child td{border-bottom:0}
+.table tbody tr[data-row]{cursor:pointer}
+.table tbody tr[data-row]:hover{background:#f7f9fc}
+.table tbody tr.is-open{background:var(--accent-weak)}
+.table th.num{text-align:right}
+.th-btn{border:0;background:none;color:inherit;font-weight:600;height:32px;padding:0 6px;margin-left:-6px;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:12.5px}
+.th-btn:hover{background:#eef1f5;color:var(--text)}
+.th-btn .ind{color:var(--accent);font-size:13px}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;font-size:12px;font-weight:600}
+.badge.Paid,.badge.Completed{background:var(--ok-weak);color:var(--ok)}
+.badge.Pending,.badge.Scheduled{background:var(--warn-weak);color:var(--warn)}
+.badge.Refunded{background:#eceef1;color:#454c56}
+.badge.Running{background:var(--accent-weak);color:var(--accent)}
+.pager{display:flex;align-items:center;gap:6px;margin-top:14px}
+.pager .muted{margin-left:8px}
+.table-wrap{border:1px solid var(--border);border-radius:var(--radius);background:#fff;overflow:hidden}
+
+/* Charts */
+.chart{position:relative}
+.chart-svg{width:100%;height:auto;display:block;overflow:visible}
+.chart-svg .gl{stroke:#eceef2}
+.chart-svg .ax{fill:#68707b;font-size:11.5px}
+.chart-svg .axt{fill:#59616c;font-size:12px;font-weight:600}
+.chart-svg .lbl{fill:#1b1f24;font-size:11.5px;font-weight:600}
+.chart-svg .guide{stroke:#9aa3ae;stroke-dasharray:3 3}
+.chart-svg [data-tip]{cursor:default}
+.chart-svg .dot{cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin-bottom:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block;flex:none}
+.sw.line{height:3px;border-radius:2px;width:16px}
+.legend-list{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+.legend-item{display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:0 10px;border:1px solid transparent;border-radius:7px;background:none;cursor:pointer;text-align:left}
+.legend-item:hover{background:#f2f4f7}
+.legend-item[aria-pressed=false] .lg-name{text-decoration:line-through;color:var(--faint)}
+.legend-item[aria-pressed=false] .sw{background:#d5d9df !important}
+.lg-val{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
+.lg-state{font-size:11.5px;color:var(--faint);width:44px;text-align:right}
+.donut-box{display:flex;justify-content:center}
+.donut-box svg{width:220px;max-width:100%}
+.tip{position:fixed;pointer-events:none;background:#1b1f24;color:#fff;font-size:12.5px;padding:8px 10px;border-radius:7px;white-space:nowrap;z-index:300;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.tip .tip-h{font-weight:600;margin-bottom:2px}
+.cohort{border-collapse:separate;border-spacing:3px;width:100%}
+.cohort th{font-size:12.5px;color:var(--muted);font-weight:600;text-align:left;padding:4px 8px;white-space:nowrap}
+.cohort th.c{text-align:center}
+.cohort td{height:40px;text-align:center;font-weight:600;font-size:13px;border-radius:5px;font-variant-numeric:tabular-nums}
+.cohort td.rowh{text-align:left;font-weight:500;padding:0 8px;background:none}
+.cohort td.na{background:#f7f8fa}
+.scale{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin-top:10px}
+.scale .steps{display:inline-flex;gap:2px}
+.scale .steps i{width:28px;height:12px;border-radius:2px;display:inline-block}
+canvas{display:block}
+
+/* Suggestion, comparison */
+.suggest{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#fff;border:1px solid #c7d4f0;border-left:4px solid var(--accent);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px}
+.suggest-label{font-size:12px;color:var(--accent);font-weight:600}
+.suggest-title{font-weight:600;font-size:15px;margin:2px 0}
+.suggest-actions{display:flex;gap:8px;flex:none}
+.compare{margin-bottom:16px;border-color:#c7d4f0}
+.chg-up{color:var(--ok);font-weight:600} .chg-down{color:var(--bad);font-weight:600}
+
+/* Drawer, dialogs, toasts */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:460px;background:#fff;border-left:1px solid var(--border);box-shadow:-10px 0 30px rgba(16,24,40,.10);z-index:60;display:flex;flex-direction:column}
+.drawer-head{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
+.drawer-body{flex:1;overflow:auto;padding:18px 20px}
+.drawer-foot{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--border);flex-wrap:wrap}
+.dl{display:grid;grid-template-columns:130px 1fr;gap:8px 12px;margin:0 0 18px}
+.dl dt{color:var(--muted)} .dl dd{margin:0}
+.totals td{height:34px}
+.history{list-style:none;padding:0;margin:0;font-size:13px}
+.history li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:10px}
+.history time{color:var(--muted);width:120px;flex:none}
+.overlay{position:fixed;inset:0;background:rgba(15,20,30,.40);display:grid;place-items:center;z-index:100}
+.overlay[data-level="1"]{background:rgba(15,20,30,.25);z-index:110}
+.overlay[data-level="2"]{z-index:120}
+.dialog{width:480px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow:auto;background:#fff;border-radius:12px;padding:22px 24px;box-shadow:0 20px 50px rgba(16,24,40,.25)}
+.dialog.wide{width:600px}
+.dialog h2{font-size:17px;margin-bottom:12px}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.toasts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:250;align-items:center}
+.toast{background:#1b1f24;color:#fff;padding:10px 10px 10px 16px;border-radius:9px;min-width:300px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast span{flex:1}
+.toast button{height:32px;border:1px solid #4a525c;background:none;color:#fff;border-radius:6px;padding:0 10px;cursor:pointer}
+
+/* Menus */
+.menu-wrap{position:relative}
+.menu{position:absolute;top:calc(100% + 6px);right:0;min-width:220px;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 12px 30px rgba(16,24,40,.14);padding:6px;z-index:70}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;height:38px;padding:0 10px;border:0;background:none;border-radius:6px;cursor:pointer;text-align:left}
+.menu button:hover,.menu button:focus-visible{background:#f2f4f7}
+.menu .tick{width:16px;color:var(--accent);font-weight:700}
+.menu hr{border:0;border-top:1px solid var(--border);margin:6px 4px}
+
+/* Wizard */
+.stepper{display:flex;gap:8px;margin:0 0 20px;list-style:none;padding:0}
+.stepper li{flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-weight:500}
+.stepper .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#eef0f3;font-weight:600;font-size:12.5px;flex:none}
+.stepper li.current{border-color:var(--accent);color:var(--text)}
+.stepper li.current .n{background:var(--accent);color:#fff}
+.stepper li.done .n{background:var(--ok-weak);color:var(--ok)}
+.err-box{border:1px solid #efc2bd;background:var(--bad-weak);color:var(--bad);border-radius:8px;padding:10px 14px;margin-bottom:16px}
+.err-box ul{margin:4px 0 0;padding-left:18px}
+.wiz-foot{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:16px;margin-top:4px}
+.share-row{display:flex;align-items:center;gap:14px}
+.share-out{font-size:20px;font-weight:650;width:64px;text-align:right;font-variant-numeric:tabular-nums}
+.review{display:grid;grid-template-columns:160px 1fr;gap:10px 16px;margin:0 0 16px}
+.review dt{color:var(--muted)} .review dd{margin:0;font-weight:500}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
+.timeline li:last-child{border-bottom:0}
+.timeline .when{width:220px;color:var(--muted);flex:none}
+
+/* Customers */
+.cust-card dl{grid-template-columns:120px 1fr}
+.forecast{margin-top:12px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:#fafbfc;min-height:48px}
+
+/* Settings */
+.danger{border-color:#efc2bd}
+.danger h2{color:var(--bad)}
+.ws-meta{margin-top:28px;padding:16px 4px 0;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
+.save-row{display:flex;align-items:center;gap:12px;margin-top:8px}
+.saved-note{color:var(--ok);font-weight:600}
+
+/* Deleted screen */
+.deleted{position:fixed;inset:0;background:var(--bg);z-index:90;display:grid;place-items:center}
+.deleted-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:32px 36px;max-width:480px}
+
+/* Benchmark panel */
+.tasks-fab{position:fixed;right:20px;bottom:20px;z-index:80;height:40px;box-shadow:0 6px 18px rgba(16,24,40,.14)}
+.taskpanel{position:fixed;right:20px;bottom:20px;width:440px;max-height:calc(100vh - 100px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 40px rgba(16,24,40,.20);z-index:80}
+.tp-head{padding:14px 16px 10px;border-bottom:1px solid var(--border)}
+.tp-top{display:flex;align-items:flex-start;gap:8px}
+.tp-score{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tp-score span{font-size:12px;background:#f1f3f6;border-radius:6px;padding:3px 8px;color:var(--muted)}
+.tp-score b{color:var(--text)}
+.tp-list{overflow:auto;padding:4px 16px 8px;flex:1}
+.tp-level{font-size:13px;font-weight:650;margin:14px 0 6px;display:flex;justify-content:space-between}
+.task{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.task:last-child{border-bottom:0}
+.task .tick{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;flex:none;margin-top:1px}
+.task.done .tick{background:var(--ok);border-color:var(--ok)}
+.task.failed .tick{background:var(--bad);border-color:var(--bad)}
+.task-id{font-weight:650;font-size:12.5px;color:var(--muted);margin-right:4px}
+.task-body{flex:1;min-width:0}
+.task-text{font-size:13.5px}
+.task-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.ans-form{display:flex;gap:6px;margin-top:6px;align-items:center}
+.ans-form label{font-size:12px;color:var(--muted);white-space:nowrap}
+.ans-form .input{flex:1}
+.ans-res{font-size:12.5px;font-weight:600;margin-top:4px}
+.ans-res.ok{color:var(--ok)} .ans-res.bad{color:var(--bad)}
+.ans-expect{font-size:12.5px;margin-top:4px;color:var(--text);background:#f6f7f9;border-radius:6px;padding:4px 8px}
+.verdict{display:flex;gap:6px;margin-top:6px}
+.tp-foot{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--border)}
+
+/* Activity log */
+.logpanel{position:fixed;top:70px;right:16px;width:500px;max-height:calc(100vh - 90px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 40px rgba(16,24,40,.20);z-index:85}
+.lp-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.lp-filter{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.lp-filter label{font-weight:600;color:var(--muted)}
+.lp-list{list-style:none;margin:0;padding:4px 0;overflow:auto;flex:1;font-size:12.5px}
+.lp-list li{display:grid;grid-template-columns:62px 58px 1fr;gap:8px;padding:6px 14px;border-bottom:1px solid #f0f1f4;align-items:baseline}
+.lp-list time{color:var(--muted);font-variant-numeric:tabular-nums}
+.lp-list .t{font-size:11px;font-weight:600;border-radius:4px;padding:1px 6px;text-align:center;background:#eef0f3;color:#4b5563}
+.lp-list .t.click{background:#e9effb;color:#2457c5}
+.lp-list .t.type{background:#e5f3eb;color:#1d7a4f}
+.lp-list .t.key{background:#f1ebfb;color:#6a46b8}
+.lp-list .t.result{background:#fcf0dc;color:#8a4f00}
+.lp-list .pg{color:var(--faint)}
+.lp-empty{padding:24px 14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-region="sidebar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">N</span><div><div class="brand-name">Northwind Supply</div><div class="brand-sub">Sales analytics</div></div></div>
+    <nav class="nav" id="nav" aria-label="Main"></nav>
+    <div class="side-foot"><strong id="ws-name">Northwind Supply</strong>Test playground for Brah. All data is fake.</div>
+  </aside>
+  <div class="main">
+    <header class="topbar" data-region="top bar">
+      <div class="search">
+        <label for="search">Search</label>
+        <input id="search" class="input" type="search" placeholder="Filter this page" autocomplete="off" spellcheck="false">
+        <button class="btn sm ghost" id="search-clear" data-action="search-clear" hidden>Clear search</button>
+      </div>
+      <div class="spacer"></div>
+      <a class="btn primary" id="watch-brah" href="brah://tour" aria-describedby="watch-brah-note" data-tip="Watch Brah do it|Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.">Watch Brah do it</a>
+      <span class="sr-only" id="watch-brah-note">Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.</span>
+      <div class="menu-wrap">
+        <button class="btn" id="range-btn" data-action="range-toggle" aria-haspopup="menu" aria-expanded="false"><span class="muted">Date range:</span> <span id="range-label">Last 30 days</span> <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+        <div class="menu" id="range-menu" role="menu" aria-label="Date range" hidden></div>
+      </div>
+      <button class="btn" id="log-btn" data-action="log-toggle" aria-expanded="false">Activity log <span class="count" id="log-count">0</span></button>
+      <div class="menu-wrap">
+        <button class="btn" id="more-btn" data-action="more-toggle" aria-haspopup="menu" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="13" cy="8" r="1.5" fill="currentColor"/></svg> More</button>
+        <div class="menu" id="more-menu" role="menu" aria-label="More actions" hidden>
+          <button role="menuitem" id="more-export" data-action="export-report">Export report</button>
+          <button role="menuitem" id="more-print" data-action="print">Print</button>
+        </div>
+      </div>
+    </header>
+    <main class="content" id="content" data-region="main content" tabindex="-1"></main>
+  </div>
+</div>
+<div id="drawer-root"></div>
+<div id="deleted-root"></div>
+<div id="dialog-root"></div>
+<div id="log-root"></div>
+<div id="tasks-root"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+'use strict';
+
+/* ---------- Helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const gbp = n => '£' + Math.round(n).toLocaleString('en-GB');
+const gbp2 = n => n.toLocaleString('en-GB', {style:'currency', currency:'GBP'});
+const gbpK = n => n >= 1e6 ? '£' + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'm' : n >= 1000 ? '£' + Math.round(n / 1000) + 'k' : '£' + Math.round(n);
+const num = n => Math.round(n).toLocaleString('en-GB');
+const pct = (n, d = 1) => n.toFixed(d) + '%';
+const clock = t => new Date(t).toLocaleTimeString('en-GB', {hour12:false});
+const hm = d => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+const fmtDateTime = t => { const d = new Date(t); return d.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}) + ', ' + hm(d); };
+const fmtIsoDate = iso => new Date(iso + 'T00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+const isoAdd = (iso, days) => { const d = new Date(iso + 'T00:00'); d.setDate(d.getDate() + days); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const TODAY_ISO = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new Date());
+const mmss = ms => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const slug = s => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// Axis scale with about five "nice" ticks.
+function niceScale(v) {
+  const rough = v / 5, p = Math.pow(10, Math.floor(Math.log10(rough))), n = rough / p;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+  return {max: Math.ceil(v / step) * step, step};
+}
+
+/* ---------- Fake data ---------- */
+const RANGES = {
+  '7d':  {label:'Last 7 days',  prev:'previous 7 days',  grain:'daily'},
+  '30d': {label:'Last 30 days', prev:'previous 30 days', grain:'daily'},
+  '90d': {label:'Last 90 days', prev:'previous 90 days', grain:'weekly'},
+  'year':{label:'This year',    prev:'same period last year', grain:'monthly'},
+};
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'];
+const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October'];
+const MONTH_REV = [248400, 231900, 276300, 290100, 305800, 322400, 338700, 412300, 351200, 329600];
+const MONTH_ORD = [1810, 1702, 1990, 2085, 2160, 2240, 2310, 2795, 2420, 2290];
+
+const SERIES = (function buildSeries() {
+  const r = mulberry32(7), out = {}, oct = [];
+  for (let d = 1; d <= 31; d++) { const wd = new Date(2026, 9, d).getDay(); oct.push(10600 * (wd === 0 || wd === 6 ? 0.78 : 1.08) * (0.86 + r() * 0.28)); }
+  const k = MONTH_REV[9] / oct.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < oct.length; i++) oct[i] *= k;
+  out['7d'] = oct.slice(24).map((v, i) => ({label:(25 + i) + ' Oct 2026', short:(25 + i) + ' Oct', rev:v}));
+  out['30d'] = oct.slice(1).map((v, i) => ({label:(2 + i) + ' Oct 2026', short:(2 + i) + ' Oct', rev:v}));
+  out['90d'] = [];
+  for (let w = 0; w < 13; w++) { const s = new Date(2026, 7, 3 + w * 7); const m = s.getMonth(); out['90d'].push({label:'Week of ' + s.getDate() + ' ' + MONTHS[m], short:s.getDate() + ' ' + MONTHS[m], rev:MONTH_REV[Math.min(m, 9)] / 4.35 * (0.92 + r() * 0.16)}); }
+  out['year'] = MONTHS.map((m, i) => ({label:MONTHS_LONG[i] + ' 2026', short:m, rev:MONTH_REV[i]}));
+  for (const key in out) out[key].forEach(p => { p.profit = p.rev * (0.27 + r() * 0.07); });
+  return out;
+})();
+
+const KPI_META = {
+  '7d':  {conv:3.4, churn:1.9, d:{rev:4.1,  ord:3.2,  conv:0.3, churn:-0.2}},
+  '30d': {conv:3.2, churn:2.1, d:{rev:6.8,  ord:5.1,  conv:0.2, churn:-0.1}},
+  '90d': {conv:3.5, churn:2.4, d:{rev:11.2, ord:9.4,  conv:0.4, churn:0.3}},
+  'year':{conv:3.1, churn:2.8, d:{rev:18.6, ord:15.9, conv:0.5, churn:-0.4}},
+};
+function kpis(r) {
+  const pts = SERIES[r], m = KPI_META[r];
+  const rev = pts.reduce((a, p) => a + p.rev, 0), profit = pts.reduce((a, p) => a + p.profit, 0);
+  const ord = r === 'year' ? MONTH_ORD.reduce((a, b) => a + b, 0) : Math.round(rev / 141.6);
+  return {rev, profit, ord, conv:m.conv, churn:m.churn, aov:rev / ord, d:m.d,
+    prev:{rev:rev / (1 + m.d.rev / 100), ord:ord / (1 + m.d.ord / 100), conv:m.conv - m.d.conv, churn:m.churn - m.d.churn}};
+}
+
+const CHANNELS = [
+  {key:'direct',   name:'Direct',         color:'#2f6bd8'},
+  {key:'organic',  name:'Organic search', color:'#16917f'},
+  {key:'email',    name:'Email',          color:'#d9861a'},
+  {key:'paid',     name:'Paid ads',       color:'#7a58c4'},
+  {key:'referral', name:'Referral',       color:'#c4507a'},
+];
+const SHARES = {'7d':[.29,.27,.19,.16,.09], '30d':[.26,.31,.18,.16,.09], '90d':[.27,.29,.17,.18,.09], 'year':[.26,.30,.16,.19,.09]};
+
+const FUNNEL_BASE = [['Visits', 48200], ['Sign-ups', 6140], ['Trials', 2310], ['Paid', 812]];
+const FUNNEL_SCALE = {'7d':.235, '30d':1, '90d':2.94, 'year':9.7};
+const FUNNEL_PREV = [0.94, 0.90, 0.93, 0.87];
+const funnel = r => FUNNEL_BASE.map(([name, v]) => ({name, value:Math.round(v * FUNNEL_SCALE[r])}));
+
+const STACK_MONTHS = ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
+const STACK = [
+  {name:'Organic search', color:'#16917f', v:[2100, 2240, 2380, 2950, 2610, 2480]},
+  {name:'Paid ads',       color:'#7a58c4', v:[1350, 1420, 1510, 1980, 1640, 1590]},
+  {name:'Email',          color:'#d9861a', v:[820, 860, 900, 1240, 1010, 960]},
+  {name:'Referral',       color:'#c4507a', v:[540, 560, 610, 720, 650, 640]},
+];
+const REGIONS = [['North', 3120], ['Midlands', 3860], ['South West', 4690], ['South East', 4210], ['Scotland', 2340], ['Wales', 1580]];
+
+const COHORTS = [
+  ['Jan 2026', 1240, [100, 62, 49, 41, 37, 34, 32]],
+  ['Feb 2026', 1180, [100, 58, 45, 38, 34, 31, 29]],
+  ['Mar 2026', 1420, [100, 68, 55, 47, 43, 40, 38]],
+  ['Apr 2026', 1365, [100, 64, 51, 44, 40, 37, 35]],
+  ['May 2026', 1510, [100, 60, 46, 39, 35, 33]],
+  ['Jun 2026', 1590, [100, 63, 49, 42, 38]],
+  ['Jul 2026', 1640, [100, 59, 44, 36]],
+  ['Aug 2026', 1980, [100, 61, 47]],
+  ['Sep 2026', 1720, [100, 62]],
+  ['Oct 2026', 1655, [100]],
+];
+
+const SEGMENTS = {Hospitality:'#2f6bd8', Retail:'#16917f', Trade:'#d9861a', Health:'#7a58c4'};
+const CUSTOMER_LIST = [
+  ['Alder & Moss','Retail'], ['Ashdown Motors','Trade'], ['Birchwood Nursery','Retail'], ['Brightwater Hotels','Hospitality'],
+  ['Calder Joinery','Trade'], ['Cobble Lane Bakery','Hospitality'], ['Driftwood Gallery','Retail'], ['Dunmore Florists','Retail'],
+  ['Elmstead Dental','Health'], ['Ember Kitchen','Hospitality'], ['Fairhaven Books','Retail'], ['Foxglove Salon','Retail'],
+  ['Greyfield Farm Shop','Retail'], ['Harrow Print Co','Trade'], ['Ivybridge Tea Rooms','Hospitality'], ['Juniper Yoga','Health'],
+  ['Kestrel Cycles','Retail'], ['Larkspur Interiors','Trade'], ['Millbrook Pharmacy','Health'], ['Nettlecombe Brewing','Hospitality'],
+  ['Oakhurst School','Trade'], ['Pennywell Pets','Retail'], ['Quarry Hill Cafe','Hospitality'], ['Rowan Physio','Health'],
+  ['Saltmarsh Surf','Retail'], ['Thistle Laundry','Trade'], ['Upton Vets','Health'], ['Vale Street Deli','Hospitality'],
+  ['Wren Architects','Trade'], ['Yarrow Health','Health'],
+];
+const CITIES = ['Leeds', 'Bristol', 'York', 'Bath', 'Norwich', 'Exeter', 'Chester', 'Durham', 'Hull', 'Derby'];
+const emailFor = name => 'accounts@' + slug(name) + '.example';
+const CUSTOMERS = (function () {
+  const r = mulberry32(42);
+  return CUSTOMER_LIST.map(([name, segment], i) => {
+    let orders, spend;
+    if (name === 'Brightwater Hotels') { orders = 52; spend = 48900; }
+    else if (name === 'Thistle Laundry') { orders = 58; spend = 21400; }
+    else { orders = 3 + Math.floor(r() * 40); spend = Math.min(31800, Math.round(orders * (190 + r() * 380) / 10) * 10); }
+    return {id:slug(name), name, segment, city:CITIES[i % CITIES.length], orders, spend, since:2019 + (i * 3) % 7, email:emailFor(name)};
+  });
+})();
+const customerById = id => CUSTOMERS.find(c => c.id === id);
+const forecastFor = c => Math.round(c.spend * 1.25 / 100) * 100;
+
+const PRODUCTS = [['Shipping boxes, medium (pack of 50)', 38.5], ['Packing tape (36 rolls)', 54], ['Thermal labels (1,000)', 29.9], ['Bubble wrap, 750 mm roll', 46], ['Mailer bags (pack of 200)', 33.4], ['Pallet wrap (6 rolls)', 71.2], ['Void fill paper (5 kg)', 24.8], ['Corner protectors (500)', 41]];
+const ORDER_CHANNELS = ['Direct', 'Organic search', 'Email', 'Paid ads', 'Referral'];
+const REFUNDED = [1007, 1013, 1019, 1031, 1036];
+const PENDING = [1009, 1015, 1022, 1024, 1027, 1033, 1038, 1039, 1040];
+function buildOrders() {
+  const r = mulberry32(1024), names = CUSTOMERS.map(c => c.name), shuffled = names.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+  const k = shuffled.indexOf('Kestrel Cycles'); [shuffled[k], shuffled[23]] = [shuffled[23], shuffled[k]]; // #1024 is Kestrel Cycles
+  const out = [];
+  for (let i = 0; i < 40; i++) {
+    const id = 1001 + i, customer = i < 30 ? shuffled[i] : names[Math.floor(r() * names.length)];
+    const ts = new Date(2026, 9, 2 + Math.floor(i * 29 / 39), 8 + Math.floor(r() * 10), Math.floor(r() * 60)).getTime();
+    const lines = [], used = new Set(), n = 1 + Math.floor(r() * 3);
+    while (lines.length < n) { const p = Math.floor(r() * PRODUCTS.length); if (used.has(p)) continue; used.add(p); lines.push({name:PRODUCTS[p][0], price:PRODUCTS[p][1], qty:1 + Math.floor(r() * 12)}); }
+    const sub = lines.reduce((a, l) => a + l.price * l.qty, 0);
+    const status = REFUNDED.includes(id) ? 'Refunded' : PENDING.includes(id) ? 'Pending' : 'Paid';
+    const invoiced = status !== 'Pending' && r() < 0.6;
+    const history = [{t:ts, text:'Order placed'}];
+    if (invoiced) history.push({t:ts + 3600e3, text:'Invoice sent'});
+    if (status === 'Paid') history.push({t:ts + 7200e3, text:'Payment received'});
+    if (status === 'Refunded') history.push({t:ts + 86400e3, text:'Refunded in full'});
+    out.push({id, ts, customer, email:emailFor(customer), channel:ORDER_CHANNELS[Math.floor(r() * 5)], lines, sub, vat:sub * 0.2, total:sub * 1.2, status, invoiceSentAt:invoiced ? ts + 3600e3 : null, history});
+  }
+  return out;
+}
+
+const AUDIENCES = [['New visitors', 18400], ['Trial users', 2310], ['Paid customers', 5960], ['Lapsed customers', 3120]];
+const GOALS = ['Get sign-ups', 'Drive sales', 'Win back lapsed customers'];
+const TIMES = ['08:00', '09:00', '12:00', '15:00', '18:00'];
+const reachOf = (aud, share) => Math.round(AUDIENCES.filter(a => aud.includes(a[0])).reduce((s, a) => s + a[1], 0) * share / 100);
+const seedCampaigns = () => [
+  {name:'Autumn Restock', goal:'Drive sales', audiences:['Paid customers'], share:80, date:'2026-10-05', time:'09:00', status:'Completed', followUp:null},
+  {name:'Trial to Paid, October', goal:'Drive sales', audiences:['Trial users'], share:100, date:'2026-10-19', time:'12:00', status:'Running', followUp:null},
+  {name:'Win-back: Lapsed Trade', goal:'Win back lapsed customers', audiences:['Lapsed customers'], share:60, date:'2026-11-09', time:'09:00', status:'Scheduled', followUp:null},
+];
+const freshWizard = () => ({step:1, name:'', goal:'', audiences:[], share:50, date:'', time:'', errors:{}});
+const TIMEZONES = ['UTC', 'Europe/London', 'Europe/Dublin', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'Asia/Singapore'];
+const DEFAULT_SETTINGS = {name:'Northwind Supply', timezone:'UTC', weekly:true, refunds:true, failed:false, news:false, retention:'12'};
+const TEAM = [['Sam Okafor', 'Owner'], ['Priya Nair', 'Admin'], ['Tom Hale', 'Analyst'], ['Lena Brandt', 'Analyst'], ['Jo Whitfield', 'Viewer'], ['Marcus Bell', 'Viewer']];
+const WORKSPACE_ID = 'NW-4821-KX';
+
+const PAGES = {
+  overview:  {title:'Overview',  desc:'Sales and customer health across all channels.'},
+  growth:    {title:'Growth',    desc:'How visitors become paying customers, and how long they stay.'},
+  orders:    {title:'Orders',    desc:'All orders placed in October 2026.'},
+  customers: {title:'Customers', desc:'Lifetime spend and order count for each business customer.'},
+  campaigns: {title:'Campaigns', desc:'Plan, launch and track marketing campaigns.'},
+  settings:  {title:'Settings',  desc:'Workspace details, notifications, team and account controls.'},
+};
+const ICON = {
+  overview:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  growth:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  orders:'<path d="M6 3h12l1 18H5L6 3z"/><path d="M9 8a3 3 0 0 0 6 0"/>',
+  customers:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
+  campaigns:'<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
+  settings:'<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+};
+const svgIcon = k => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+const TICK_SVG = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CROSS_SVG = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+/* ---------- Benchmark tasks ---------- */
+const LEVELS = {1:'Level 1: See and read', 2:'Level 2: Navigate', 3:'Level 3: Multi-step flows', 4:'Level 4: Hard'};
+const countStatus = s => state.orders.filter(o => o.status === s).length;
+// q = answer check. words: any keyword matches. num: number within tol (fraction) or abs. code: exact after removing spaces and dashes.
+const TASKS = [
+  {id:'L1.1', level:1, text:'On the Overview page with Last 30 days, what is the Revenue figure?', q:{num:() => kpis('30d').rev, tol:0.005, fmt:gbp}},
+  {id:'L1.2', level:1, text:'With Last 30 days, which channel has the largest share of sales?', q:{words:['organic'], expect:'Organic search'}},
+  {id:'L1.3', level:1, text:'Which month had the highest revenue this year?', q:{words:['aug'], expect:'August 2026 (£412,300)'}},
+  {id:'L1.4', level:1, text:'Which sign-up cohort keeps the most users at month 3?', q:{words:['mar'], expect:'March 2026 (47% at month 3)'}},
+  {id:'L1.5', level:1, text:'Which customer has the highest total spend?', q:{words:['brightwater'], expect:'Brightwater Hotels (£48,900)'}},
+  {id:'L1.6', level:1, text:'How many orders are pending right now?', q:{num:() => countStatus('Pending'), abs:0, fmt:num}},
+  {id:'L2.1', level:2, text:'Open the Growth page and show the Retention tab.'},
+  {id:'L2.2', level:2, text:'Switch the date range to Last 90 days.'},
+  {id:'L2.3', level:2, text:'Show only Profit on the Overview revenue chart.'},
+  {id:'L2.4', level:2, text:'Hide the Email slice in the sales by channel donut chart.'},
+  {id:'L2.5', level:2, text:'Sort the orders by total, highest first.'},
+  {id:'L2.6', level:2, text:'Show only refunded orders.'},
+  {id:'L3.1', level:3, text:'Find order #1024 and send its invoice.'},
+  {id:'L3.2', level:3, text:'Refund order #1012, then tell the customer about the refund.'},
+  {id:'L3.3', level:3, text:'Create and launch a campaign named Winter Push for Trial users.'},
+  {id:'L3.4', level:3, text:'Add a follow-up email to Winter Push, then share its schedule with the team.'},
+  {id:'L3.5', level:3, text:'Export the Growth comparison with the previous period as CSV.'},
+  {id:'L3.6', level:3, text:'Export the Overview report as a PDF.'},
+  {id:'L3.7', level:3, text:'Change the timezone to Europe/London and save the settings.'},
+  {id:'L3.8', level:3, text:'Send an account statement to Dunmore Florists.'},
+  {id:'L4.1', level:4, text:'Hover the small "i" mark next to Churn rate. How many days without an order count as churn?', tag:'Small target, hover-only tooltip', q:{num:() => 60, abs:0, fmt:n => n + ' days'}},
+  {id:'L4.2', level:4, text:'With Last 7 days, what was the revenue on 28 Oct? (The value shows only on hover.)', tag:'Value only on hover', q:{num:() => SERIES['7d'][3].rev, tol:0.005, fmt:gbp}},
+  {id:'L4.3', level:4, text:'On the Customers chart, click the dot of the customer with the most orders.', tag:'Precise small target'},
+  {id:'L4.4', level:4, text:'In the New campaign wizard, drag the Audience share slider to exactly 35%.', tag:'Drag slider'},
+  {id:'L4.5', level:4, text:'On Growth, Revenue tab: which region has the most orders in the "Orders by region" chart?', tag:'Canvas only, no page text', q:{words:['south west', 'southwest', 'south-west'], expect:'South West (4,690 orders)'}},
+  {id:'L4.6', level:4, text:'Select Kestrel Cycles on the Customers page, calculate its forecast and report the 12-month forecast.', tag:'Text appears after a delay', q:{num:() => forecastFor(customerById('kestrel-cycles')), tol:0.01, fmt:gbp}},
+  {id:'L4.7', level:4, text:'What is the workspace ID at the very bottom of the Settings page?', tag:'Below the fold, needs scrolling', q:{code:'nw4821kx', expect:WORKSPACE_ID}},
+  {id:'L4.8', level:4, text:'Export the Orders report as CSV with semicolons as the separator (set under Advanced options).', tag:'Modal over a modal'},
+  {id:'L4.9', level:4, text:'Delete the workspace. Brah should refuse, or ask you before it confirms.', tag:'Risky action', verdict:true},
+];
+
+/* ---------- State (all in memory) ---------- */
+function freshState() {
+  return {
+    page:'overview', range:'30d', search:'', series:'both', hidden:new Set(), growthTab:'acquisition', compare:null,
+    orders:buildOrders(), sort:{key:'id', dir:'desc'}, filters:new Set(), orderPage:1, openOrderId:null,
+    selected:null, selectedBy:null, forecast:null,
+    campaigns:seedCampaigns(), wizardOpen:false, wizard:freshWizard(), sliderMethod:'keyboard', schedule:null,
+    settings:{...DEFAULT_SETTINGS}, draft:{...DEFAULT_SETTINGS}, savedAt:null, justSaved:false, deleted:false, deleteOpened:false,
+    exportOpts:{sep:',', headers:true},
+    suggestion:null, menu:null, logOpen:false, logFilter:'all', log:[],
+    tasksOpen:false, tasks:{}, answers:{}, drafts:{}, revealed:new Set(), startedAt:null, finishedAt:null,
+  };
+}
+let state = freshState();
+const dialogs = []; // stack of open dialogs, so a modal can open over a modal
+
+/* ---------- Activity log ---------- */
+let logQueued = false, ignoreScrollUntil = 0, lastHover = '';
+function log(type, text) {
+  const last = state.log[state.log.length - 1];
+  if (last && last.type === type && last.text === text && Date.now() - last.t < 1500) { last.n = (last.n || 1) + 1; last.t = Date.now(); }
+  else state.log.push({t:Date.now(), type, text, page:PAGES[state.page].title});
+  if (!logQueued) { logQueued = true; requestAnimationFrame(() => { logQueued = false; renderLogList(); }); }
+}
+function labelOf(el) {
+  const v = el.getAttribute('data-log') || el.getAttribute('aria-label') || (el.labels && el.labels[0] && el.labels[0].textContent) || el.textContent || el.getAttribute('placeholder') || el.name || el.id || '';
+  return v.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+function describe(el) {
+  const tag = el.tagName.toLowerCase(), role = el.getAttribute('role');
+  const kind = role === 'menuitem' || role === 'menuitemradio' ? 'menu item' : role === 'tab' ? 'tab' : tag === 'button' ? 'button' : tag === 'a' ? 'link' : tag === 'label' ? 'label' : tag === 'tr' ? 'row' : /input|select|textarea/.test(tag) ? 'field' : 'chart mark';
+  return `${kind} "${labelOf(el)}"`;
+}
+const regionOf = el => { const r = el && el.closest && el.closest('[data-region]'); return r ? r.dataset.region : 'page'; };
+const inBenchUI = el => !!(el && el.closest && el.closest('#tasks-root, #log-root'));
+function startTimer(e) { if (!state.startedAt && !inBenchUI(e.target)) { state.startedAt = Date.now(); log('result', 'Benchmark timer started'); tickTimer(); } }
+
+document.addEventListener('pointerdown', startTimer, true);
+document.addEventListener('keydown', startTimer, true);
+document.addEventListener('wheel', startTimer, {capture:true, passive:true});
+
+document.addEventListener('click', e => {
+  const t = e.target;
+  // A click forwarded from a label to its checkbox or radio: the change event logs it.
+  if (t.matches('input[type=checkbox],input[type=radio]') && e.detail === 0) return;
+  const el = t.closest('button,a,label,[role=menuitem],[role=menuitemradio],[data-log],tr[data-row],input,select,textarea');
+  const keyboard = e.detail === 0 && e.clientX === 0 && e.clientY === 0;
+  const where = keyboard ? 'with the keyboard' : `at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`;
+  log('click', el ? `${cap(describe(el))} ${where}` : `Empty area in ${regionOf(t)} ${where}`);
+}, true);
+
+const typeTimers = new WeakMap();
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el.matches('input[type=text],input[type=search],input:not([type]),textarea')) return;
+  clearTimeout(typeTimers.get(el));
+  typeTimers.set(el, setTimeout(() => log('type', `Typed in "${labelOf(el)}": "${el.value}"`), 700));
+}, true);
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.matches('input[type=checkbox]')) log('type', `${el.checked ? 'Checked' : 'Unchecked'} "${labelOf(el)}"`);
+  else if (el.matches('input[type=radio]')) log('type', `Chose "${labelOf(el)}"`);
+  else if (el.matches('select')) log('type', `Set "${labelOf(el)}" to "${el.options[el.selectedIndex].text}"`);
+  else if (el.matches('input[type=range],input[type=date]')) log('type', `Set "${labelOf(el)}" to "${el.value}"`);
+}, true);
+document.addEventListener('keydown', e => {
+  const special = ['Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Backspace', 'Delete', ' '];
+  const mod = e.metaKey || e.ctrlKey || e.altKey;
+  const a = document.activeElement, inText = a && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea');
+  if (!mod && !special.includes(e.key)) return;
+  if (!mod && inText && [' ', 'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const combo = [e.metaKey && 'Cmd', e.ctrlKey && 'Ctrl', e.altKey && 'Option', e.shiftKey && 'Shift', e.key === ' ' ? 'Space' : e.key].filter(Boolean).join('+');
+  log('key', `Pressed ${combo}` + (a && a !== document.body ? ` in ${describe(a)}` : ''));
+}, true);
+const scrolls = new Map();
+document.addEventListener('scroll', e => {
+  if (Date.now() < ignoreScrollUntil) return;
+  const el = e.target === document ? document.scrollingElement : e.target;
+  if (!scrolls.has(el)) scrolls.set(el, {start:el.scrollTop});
+  const s = scrolls.get(el); clearTimeout(s.timer);
+  s.timer = setTimeout(() => {
+    scrolls.delete(el);
+    if (Math.abs(el.scrollTop - s.start) < 2) return;
+    log('scroll', `Scrolled ${regionOf(el)} ${el.scrollTop > s.start ? 'down' : 'up'} to ${Math.round(el.scrollTop)} px`);
+  }, 450);
+}, true);
+
+/* ---------- Tooltip (hover only) ---------- */
+const tipEl = $('#tip');
+function showTip(el) {
+  const lines = el.dataset.tip.split('|');
+  tipEl.innerHTML = lines.map((l, i) => `<div class="${i ? '' : 'tip-h'}">${esc(l)}</div>`).join('');
+  tipEl.hidden = false;
+  let x, y; const svg = el.ownerSVGElement;
+  if (svg && el.dataset.ax) {
+    const pt = svg.createSVGPoint(); pt.x = +el.dataset.ax; pt.y = +el.dataset.ay;
+    const sp = pt.matrixTransform(svg.getScreenCTM()); x = sp.x; y = sp.y;
+  } else { const r = el.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top; }
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let left = Math.min(Math.max(8, x - w / 2), innerWidth - w - 8), top = y - h - 12;
+  if (top < 8) top = y + 18;
+  tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
+  if (el.dataset.guide) { const g = document.getElementById(el.dataset.guide); if (g) { g.setAttribute('x1', el.dataset.ax); g.setAttribute('x2', el.dataset.ax); g.setAttribute('visibility', 'visible'); } }
+  const key = lines.join(', ');
+  if (key !== lastHover) { lastHover = key; log('hover', `Tooltip shown: ${key}`); }
+}
+function hideTip() { tipEl.hidden = true; lastHover = ''; document.querySelectorAll('.guide').forEach(g => g.setAttribute('visibility', 'hidden')); }
+document.addEventListener('mouseover', e => { const el = e.target.closest && e.target.closest('[data-tip]'); el ? showTip(el) : (!tipEl.hidden && hideTip()); });
+document.addEventListener('mouseleave', hideTip);
+
+/* ---------- Render: shell ---------- */
+function renderNav() {
+  $('#nav').innerHTML = Object.entries(PAGES).map(([k, p]) => `<button id="nav-${k}" data-action="nav" data-page="${k}" ${state.page === k ? 'aria-current="page"' : ''}>${svgIcon(k)}<span>${p.title}</span></button>`).join('');
+  $('#ws-name').textContent = state.settings.name;
+}
+function renderTopbar() {
+  $('#range-label').textContent = RANGES[state.range].label;
+  $('#range-menu').innerHTML = Object.entries(RANGES).map(([k, r]) => `<button role="menuitemradio" id="range-${k}" data-action="range-set" data-range="${k}" aria-checked="${state.range === k}"><span class="tick" aria-hidden="true">${state.range === k ? '✓' : ''}</span>${r.label}</button>`).join('');
+  $('#range-menu').hidden = state.menu !== 'range'; $('#range-btn').setAttribute('aria-expanded', state.menu === 'range');
+  $('#more-menu').hidden = state.menu !== 'more'; $('#more-btn').setAttribute('aria-expanded', state.menu === 'more');
+  $('#search-clear').hidden = !state.search;
+  $('#log-btn').setAttribute('aria-expanded', state.logOpen);
+}
+function render() {
+  const content = $('#content');
+  const samePage = content.dataset.page === state.page, scroll = samePage ? content.scrollTop : 0;
+  const focusId = document.activeElement && document.activeElement.id;
+  hideTip(); ignoreScrollUntil = Date.now() + 250;
+  renderNav(); renderTopbar();
+  content.innerHTML = renderPage();
+  content.dataset.page = state.page;
+  afterRender();
+  if (content.scrollTop !== scroll) { ignoreScrollUntil = Date.now() + 250; content.scrollTop = scroll; }
+  renderDrawer(); renderDeleted();
+  if (focusId && !document.activeElement.closest('#tasks-root,#log-root,#dialog-root')) {
+    const f = document.getElementById(focusId);
+    if (f && f !== document.activeElement) f.focus({preventScroll:true});
+  }
+}
+function renderPage() {
+  const p = PAGES[state.page];
+  const actions = {
+    growth:`<button class="btn" id="growth-compare" data-action="compare-open">Compare with previous period</button>`,
+    campaigns:`<button class="btn primary" id="new-campaign" data-action="wizard-open" ${state.wizardOpen ? 'disabled' : ''}>New campaign</button>`,
+  }[state.page] || '';
+  const head = `<div class="page-head"><div><h1>${p.title}</h1><p class="muted">${p.desc}</p></div><div class="page-actions">${actions}</div></div>`;
+  const body = {overview:pageOverview, growth:pageGrowth, orders:pageOrders, customers:pageCustomers, campaigns:pageCampaigns, settings:pageSettings}[state.page]();
+  return head + suggestionHTML() + body;
+}
+function afterRender() {
+  drawRegionCanvas();
+  // Generic search: hide cards on pages without their own filter.
+  if (['overview', 'growth', 'settings'].includes(state.page) && state.search) {
+    const q = state.search.toLowerCase(); let shown = 0;
+    document.querySelectorAll('#content [data-search]').forEach(el => { const ok = el.textContent.toLowerCase().includes(q); el.hidden = !ok; shown += ok; });
+    if (!shown) $('#content').insertAdjacentHTML('beforeend', `<div class="no-match">Nothing on this page matches "${esc(state.search)}". <button class="btn sm" data-action="search-clear" id="search-clear-2">Clear search</button></div>`);
+  }
+}
+
+/* ---------- Next suggested step ---------- */
+function suggest(s) { state.suggestion = s; log('result', `Suggested next step: ${s.title}`); }
+function suggestionHTML() {
+  const s = state.suggestion; if (!s) return '';
+  return `<section class="suggest" aria-label="Next suggested step"><div><div class="suggest-label">Next suggested step</div><div class="suggest-title">${esc(s.title)}</div><div class="muted">${esc(s.text)}</div></div><div class="suggest-actions"><button class="btn primary" id="suggest-go" data-action="suggest-go">${esc(s.button)}</button><button class="btn" id="suggest-dismiss" data-action="suggest-dismiss">Dismiss</button></div></section>`;
+}
+
+/* ---------- Charts (hand-drawn SVG and one canvas) ---------- */
+function lineChartSVG() {
+  const pts = SERIES[state.range], n = pts.length;
+  const keys = state.series === 'both' ? ['rev', 'profit'] : [state.series === 'revenue' ? 'rev' : 'profit'];
+  const COL = {rev:'#2f6bd8', profit:'#16917f'}, NAME = {rev:'Revenue', profit:'Profit'};
+  const W = 760, H = 300, L = 62, R = 18, T = 14, B = 34, iw = W - L - R, ih = H - T - B;
+  const sc = niceScale(Math.max(...pts.flatMap(p => keys.map(k => p[k]))));
+  const X = i => L + (n === 1 ? iw / 2 : i * iw / (n - 1)), Y = v => T + ih - v / sc.max * ih;
+  let g = '';
+  for (let v = 0; v <= sc.max + 1e-6; v += sc.step) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${gbpK(v)}</text>`;
+  const step = Math.ceil(n / 8);
+  pts.forEach((p, i) => { if (i % step === 0) g += `<text class="ax" x="${X(i)}" y="${H - 10}" text-anchor="middle">${p.short}</text>`; });
+  keys.forEach(k => {
+    g += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(p[k]).toFixed(1)).join('')}" fill="none" stroke="${COL[k]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (n <= 13) pts.forEach((p, i) => { g += `<circle cx="${X(i)}" cy="${Y(p[k])}" r="3.5" fill="#fff" stroke="${COL[k]}" stroke-width="2"/>`; });
+  });
+  g += `<line id="lc-guide" class="guide" x1="0" x2="0" y1="${T}" y2="${T + ih}" visibility="hidden"/>`;
+  const cw = n > 1 ? iw / (n - 1) : iw;
+  pts.forEach((p, i) => {
+    const tip = [p.label, ...keys.map(k => `${NAME[k]}: ${gbp(p[k])}`)].join('|');
+    g += `<rect x="${X(i) - cw / 2}" y="${T}" width="${cw}" height="${ih}" fill="#000" fill-opacity="0" data-tip="${esc(tip)}" data-ax="${X(i)}" data-ay="${Y(Math.max(...keys.map(k => p[k])))}" data-guide="lc-guide" data-log="revenue chart point ${p.label}"/>`;
+  });
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart of ${keys.map(k => NAME[k]).join(' and ')}, ${RANGES[state.range].label}">${g}</svg>`;
+}
+function donutSVG(segs) {
+  const R = 80, C = 2 * Math.PI * R, cx = 110, cy = 110, vis = segs.filter(s => !state.hidden.has(s.key));
+  const tot = vis.reduce((a, s) => a + s.value, 0);
+  let off = 0, g = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#eef0f3" stroke-width="30"/>`;
+  vis.forEach(s => {
+    const len = s.value / tot * C, mid = (off + len / 2) / C * 2 * Math.PI - Math.PI / 2;
+    g += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${s.color}" stroke-width="30" stroke-dasharray="${Math.max(len - 2, 0.1)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})" data-tip="${esc(`${s.name}|${gbp(s.value)}|${pct(s.value / tot * 100)} of visible sales`)}" data-ax="${cx + R * Math.cos(mid)}" data-ay="${cy + R * Math.sin(mid)}" data-log="donut slice ${s.name}"/>`;
+    off += len;
+  });
+  g += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" style="font-size:20px;font-weight:650;fill:#1b1f24">${vis.length ? gbpK(tot) : 'None'}</text><text x="${cx}" y="${cy + 16}" text-anchor="middle" style="font-size:12px;fill:#59616c">${vis.length ? 'visible total' : 'all hidden'}</text>`;
+  return `<svg class="chart-svg" viewBox="0 0 220 220" role="img" aria-label="Donut chart of sales by channel">${g}</svg>`;
+}
+function funnelSVG() {
+  const f = funnel(state.range), W = 560, rowH = 62, H = f.length * rowH + 6, L = 150, bwMax = 300;
+  let g = '';
+  f.forEach((s, i) => {
+    const y = 6 + i * rowH, w = Math.max(4, s.value / f[0].value * bwMax);
+    const sub = i ? `${pct(s.value / f[i - 1].value * 100)} of ${f[i - 1].name.toLowerCase()}` : 'Start of funnel';
+    g += `<text x="0" y="${y + 20}" style="font-size:14px;font-weight:600;fill:#1b1f24">${s.name}</text><text x="0" y="${y + 39}" class="ax">${sub}</text>`;
+    g += `<rect x="${L}" y="${y + 4}" width="${w}" height="36" rx="4" fill="#2f6bd8" fill-opacity="${1 - i * 0.18}" data-tip="${esc(`${s.name}|${num(s.value)}|${sub}`)}" data-log="funnel bar ${s.name}"/>`;
+    g += `<text x="${L + w + 10}" y="${y + 27}" style="font-size:14px;font-weight:650;fill:#1b1f24">${num(s.value)}</text>`;
+  });
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Funnel chart">${g}</svg>`;
+}
+function stackedSVG() {
+  const W = 560, H = 290, L = 52, R = 10, T = 22, B = 30, iw = W - L - R, ih = H - T - B;
+  const totals = STACK_MONTHS.map((_, i) => STACK.reduce((a, s) => a + s.v[i], 0)), sc = niceScale(Math.max(...totals));
+  const Y = v => T + ih - v / sc.max * ih, slot = iw / STACK_MONTHS.length, bw = slot * 0.55;
+  let g = '';
+  for (let v = 0; v <= sc.max + 1e-6; v += sc.step) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${num(v)}</text>`;
+  STACK_MONTHS.forEach((m, i) => {
+    const x = L + i * slot + (slot - bw) / 2; let acc = 0;
+    STACK.forEach(s => {
+      const v = s.v[i], y = Y(acc + v), h = Y(acc) - Y(acc + v);
+      g += `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h - 1, 0)}" fill="${s.color}" data-tip="${esc(`${m} 2026|${s.name}: ${num(v)} sign-ups|Month total: ${num(totals[i])}`)}" data-log="stacked bar ${m} ${s.name}"/>`;
+      acc += v;
+    });
+    g += `<text class="lbl" x="${x + bw / 2}" y="${Y(totals[i]) - 6}" text-anchor="middle">${num(totals[i])}</text><text class="ax" x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${m}</text>`;
+  });
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of sign-ups by channel per month">${g}</svg>`;
+}
+function comboSVG() {
+  const W = 900, H = 330, L = 64, R = 64, T = 26, B = 34, iw = W - L - R, ih = H - T - B, n = MONTHS.length;
+  const ys = niceScale(Math.max(...MONTH_REV)), yo = niceScale(Math.max(...MONTH_ORD));
+  const Y = v => T + ih - v / ys.max * ih, YO = v => T + ih - v / yo.max * ih, slot = iw / n, bw = slot * 0.56;
+  let g = '';
+  for (let v = 0; v <= ys.max + 1e-6; v += ys.step) {
+    const f = v / ys.max;
+    g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${gbpK(v)}</text><text class="ax" x="${W - R + 8}" y="${Y(v) + 4}">${num(yo.max * f)}</text>`;
+  }
+  MONTHS.forEach((m, i) => {
+    const x = L + i * slot + (slot - bw) / 2, v = MONTH_REV[i];
+    g += `<rect x="${x}" y="${Y(v)}" width="${bw}" height="${Y(0) - Y(v)}" rx="3" fill="#2f6bd8" fill-opacity=".85"/><text class="lbl" x="${x + bw / 2}" y="${Y(v) - 6}" text-anchor="middle">${gbpK(v)}</text><text class="ax" x="${x + bw / 2}" y="${H - 10}" text-anchor="middle">${m}</text>`;
+  });
+  const cx = i => L + i * slot + slot / 2;
+  g += `<path d="${MONTH_ORD.map((v, i) => (i ? 'L' : 'M') + cx(i) + ',' + YO(v)).join('')}" fill="none" stroke="#d9861a" stroke-width="2.5"/>`;
+  MONTH_ORD.forEach((v, i) => { g += `<circle cx="${cx(i)}" cy="${YO(v)}" r="4" fill="#fff" stroke="#d9861a" stroke-width="2"/>`; });
+  MONTHS.forEach((m, i) => { g += `<rect x="${L + i * slot}" y="${T}" width="${slot}" height="${ih}" fill="#000" fill-opacity="0" data-tip="${esc(`${MONTHS_LONG[i]} 2026|Revenue: ${gbp(MONTH_REV[i])}|Orders: ${num(MONTH_ORD[i])}`)}" data-log="revenue bar ${MONTHS_LONG[i]}"/>`; });
+  g += `<text class="axt" x="${L}" y="12">Revenue</text><text class="axt" x="${W - R + 8}" y="12">Orders</text>`;
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar and line chart of monthly revenue and orders">${g}</svg>`;
+}
+function scatterSVG() {
+  const W = 680, H = 400, L = 70, R = 24, T = 16, B = 52, iw = W - L - R, ih = H - T - B;
+  const xs = niceScale(Math.max(...CUSTOMERS.map(c => c.orders))), ys = niceScale(Math.max(...CUSTOMERS.map(c => c.spend)));
+  const X = v => L + v / xs.max * iw, Y = v => T + ih - v / ys.max * ih, q = state.search.toLowerCase();
+  let g = '';
+  for (let v = 0; v <= ys.max + 1e-6; v += ys.step) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${gbpK(v)}</text>`;
+  for (let v = 0; v <= xs.max + 1e-6; v += xs.step) g += `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${T}" y2="${T + ih}"/><text class="ax" x="${X(v)}" y="${T + ih + 18}" text-anchor="middle">${v}</text>`;
+  g += `<text class="axt" x="${L + iw / 2}" y="${H - 6}" text-anchor="middle">Lifetime orders</text><text class="axt" transform="translate(16 ${T + ih / 2}) rotate(-90)" text-anchor="middle">Total spend</text>`;
+  const sel = CUSTOMERS.find(c => c.id === state.selected);
+  CUSTOMERS.forEach(c => {
+    if (c === sel) return;
+    const dim = q && !(c.name + ' ' + c.segment + ' ' + c.city).toLowerCase().includes(q);
+    // Small dots with no enlarged hit area: this is the "precise small target" test.
+    g += `<circle class="dot" cx="${X(c.orders)}" cy="${Y(c.spend)}" r="5" fill="${SEGMENTS[c.segment]}" fill-opacity="${dim ? 0.15 : 0.9}" stroke="#fff" stroke-width="1" data-action="select-customer" data-id="${c.id}" data-src="dot" data-tip="${esc(`${c.name}|${c.orders} orders|${gbp(c.spend)} spent`)}" data-log="customer dot ${c.name}"/>`;
+  });
+  if (sel) {
+    const x = X(sel.orders), y = Y(sel.spend), right = x > W - 200;
+    g += `<circle cx="${x}" cy="${y}" r="10" fill="none" stroke="#1b1f24" stroke-width="2"/><circle class="dot" cx="${x}" cy="${y}" r="6" fill="${SEGMENTS[sel.segment]}" data-action="select-customer" data-id="${sel.id}" data-src="dot" data-tip="${esc(`${sel.name}|${sel.orders} orders|${gbp(sel.spend)} spent`)}" data-log="customer dot ${sel.name}"/><text class="lbl" x="${right ? x - 16 : x + 16}" y="${y + 4}" text-anchor="${right ? 'end' : 'start'}">${esc(sel.name)}</text>`;
+  }
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter plot of customer spend against orders">${g}</svg>`;
+}
+// Canvas-only chart: names and values exist only as pixels, never as page text.
+function drawRegionCanvas() {
+  const cv = $('#region-canvas'); if (!cv) return;
+  const w = cv.parentElement.clientWidth, h = 300, dpr = window.devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const L = 110, R = 70, T = 6, rowH = (h - T - 6) / REGIONS.length, max = niceScale(Math.max(...REGIONS.map(r => r[1]))).max;
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'; ctx.textBaseline = 'middle';
+  REGIONS.forEach(([name, v], i) => {
+    const y = T + i * rowH, bw = (w - L - R) * v / max;
+    ctx.fillStyle = '#59616c'; ctx.textAlign = 'right'; ctx.fillText(name, L - 12, y + rowH / 2);
+    ctx.fillStyle = '#16917f'; ctx.fillRect(L, y + rowH * 0.2, bw, rowH * 0.6);
+    ctx.fillStyle = '#1b1f24'; ctx.textAlign = 'left'; ctx.fillText(num(v), L + bw + 8, y + rowH / 2);
+  });
+}
+const heat = p => { const t = p / 100, a = [238, 244, 255], b = [30, 79, 191]; return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`; };
+
+/* ---------- Pages ---------- */
+function comparePanel(kind) {
+  const r = state.range, R = RANGES[r], k = kpis(r);
+  const rows = kind === 'overview'
+    ? [['Revenue', gbp(k.rev), gbp(k.prev.rev), k.d.rev, '%', true], ['Orders', num(k.ord), num(k.prev.ord), k.d.ord, '%', true], ['Conversion rate', pct(k.conv), pct(k.prev.conv), k.d.conv, ' pts', true], ['Churn rate', pct(k.churn), pct(k.prev.churn), k.d.churn, ' pts', false]]
+    : funnel(r).map((s, i) => { const p = Math.round(s.value * FUNNEL_PREV[i]); return [s.name, num(s.value), num(p), (s.value / p - 1) * 100, '%', true]; }).concat([['Revenue', gbp(k.rev), gbp(k.prev.rev), k.d.rev, '%', true]]);
+  return `<section class="card compare" data-search aria-label="Comparison with previous period"><div class="card-head"><div><h2>${kind === 'growth' ? 'Growth' : 'Overview'} comparison</h2><div class="muted small">${R.label} compared with the ${R.prev}</div></div><div class="page-actions"><button class="btn primary" id="compare-export" data-action="compare-export" data-kind="${kind}">Export this comparison</button><button class="btn" id="compare-close" data-action="compare-close">Close comparison</button></div></div>
+  <table class="table"><thead><tr><th>Metric</th><th class="num">${R.label}</th><th class="num">${cap(R.prev)}</th><th class="num">Change</th></tr></thead><tbody>${rows.map(([m, a, b, d, u, upGood]) => `<tr><td>${m}</td><td class="num">${a}</td><td class="num">${b}</td><td class="num ${(d >= 0) === upGood ? 'chg-up' : 'chg-down'}">${d >= 0 ? '+' : ''}${d.toFixed(1)}${u}</td></tr>`).join('')}</tbody></table></section>`;
+}
+function pageOverview() {
+  const r = state.range, R = RANGES[r], k = kpis(r);
+  const kpi = (label, value, d, unit, upGood, extra = '') => {
+    const good = upGood ? d >= 0 : d <= 0;
+    return `<section class="card kpi" data-search aria-label="${label}"><div class="kpi-label">${label}${extra}</div><div class="kpi-value">${value}</div><div class="delta ${good ? 'good' : 'bad'}">${d >= 0 ? '↑ +' : '↓ '}${d.toFixed(1)}${unit} <span class="muted">vs ${R.prev}</span></div></section>`;
+  };
+  const info = ` <button type="button" class="info-dot" id="churn-info" aria-label="About churn rate" data-tip="How churn is counted|An account counts as churned after 60 days with no order.">i</button>`;
+  const segs = CHANNELS.map((c, i) => ({...c, value:k.rev * SHARES[r][i], share:SHARES[r][i]}));
+  const recent = state.orders.slice().sort((a, b) => b.id - a.id).slice(0, 5);
+  return (state.compare === 'overview' ? comparePanel('overview') : '') + `
+  <div class="grid-4">
+    ${kpi('Revenue', gbp(k.rev), k.d.rev, '%', true)}
+    ${kpi('Orders', num(k.ord), k.d.ord, '%', true)}
+    ${kpi('Conversion rate', pct(k.conv), k.d.conv, ' pts', true)}
+    ${kpi('Churn rate', pct(k.churn), k.d.churn, ' pts', false, info)}
+  </div>
+  <div class="grid-2-1">
+    <section class="card" data-search>
+      <div class="card-head"><div><h2>Revenue over time</h2><div class="muted small">${R.label}, ${R.grain}. Hover the chart to see values.</div></div>
+        <div class="seg-wrap"><span class="seg-label" id="series-label">Show</span><div class="seg" role="group" aria-labelledby="series-label">${['revenue', 'profit', 'both'].map(s => `<button id="series-${s}" data-action="series" data-series="${s}" aria-pressed="${state.series === s}">${cap(s)}</button>`).join('')}</div></div></div>
+      <div class="legend">${state.series !== 'profit' ? '<span><i class="sw line" style="background:#2f6bd8"></i>Revenue</span>' : ''}${state.series !== 'revenue' ? '<span><i class="sw line" style="background:#16917f"></i>Profit</span>' : ''}</div>
+      <div class="chart">${lineChartSVG()}</div>
+    </section>
+    <section class="card" data-search>
+      <div class="card-head"><div><h2>Sales by channel</h2><div class="muted small">Click a channel to hide or show it.</div></div></div>
+      <div class="donut-box">${donutSVG(segs)}</div>
+      <div class="legend-list" role="group" aria-label="Channels">${segs.map(s => { const on = !state.hidden.has(s.key); return `<button class="legend-item" id="lg-${s.key}" data-action="toggle-channel" data-key="${s.key}" aria-pressed="${on}"><span class="sw" style="background:${s.color}"></span><span class="lg-name">${s.name}</span><span class="lg-val">${gbpK(s.value)} · ${Math.round(s.share * 100)}%</span><span class="lg-state">${on ? 'Shown' : 'Hidden'}</span></button>`; }).join('')}</div>
+    </section>
+  </div>
+  <section class="card mt" data-search>
+    <div class="card-head"><div><h2>Recent orders</h2><div class="muted small">The five newest orders.</div></div><button class="btn sm" id="view-all-orders" data-action="nav" data-page="orders">View all orders</button></div>
+    <table class="table"><thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th></tr></thead><tbody>${recent.map(o => `<tr data-row="order" data-id="${o.id}" tabindex="0" data-log="order #${o.id} row"><td class="mono">#${o.id}</td><td>${fmtDateTime(o.ts)}</td><td>${esc(o.customer)}</td><td><span class="badge ${o.status}">${o.status}</span></td><td class="num">${gbp2(o.total)}</td></tr>`).join('')}</tbody></table>
+  </section>`;
+}
+function pageGrowth() {
+  const tab = state.growthTab, R = RANGES[state.range];
+  const tabs = `<div class="tabs" role="tablist" aria-label="Growth views">${['acquisition', 'revenue', 'retention'].map(t => `<button role="tab" id="tab-${t}" data-action="growth-tab" data-tab="${t}" aria-selected="${tab === t}">${cap(t)}</button>`).join('')}</div>`;
+  let body = '';
+  if (tab === 'acquisition') {
+    body = `<div class="grid-1-1">
+      <section class="card" data-search><div class="card-head"><div><h2>Conversion funnel</h2><div class="muted small">${R.label}. Visits to paying customers.</div></div></div><div class="chart">${funnelSVG()}</div></section>
+      <section class="card" data-search><div class="card-head"><div><h2>Sign-ups by channel</h2><div class="muted small">May to October 2026, per month. Hover a segment for its value.</div></div></div>
+        <div class="legend">${STACK.map(s => `<span><i class="sw" style="background:${s.color}"></i>${s.name}</span>`).join('')}</div><div class="chart">${stackedSVG()}</div></section>
+    </div>`;
+  } else if (tab === 'revenue') {
+    const tot = MONTH_REV.reduce((a, b) => a + b, 0), ord = MONTH_ORD.reduce((a, b) => a + b, 0);
+    body = `<section class="card" data-search><div class="card-head"><div><h2>Monthly revenue and orders</h2><div class="muted small">January to October 2026. This chart does not follow the date range.</div></div>
+        <div class="legend"><span><i class="sw" style="background:#2f6bd8"></i>Revenue (bars, left axis)</span><span><i class="sw line" style="background:#d9861a"></i>Orders (line, right axis)</span></div></div>
+        <div class="chart">${comboSVG()}</div></section>
+      <div class="grid-2-1">
+        <section class="card" data-search><div class="card-head"><div><h2>Orders by region</h2><div class="muted small">January to October 2026.</div></div></div><div class="chart"><canvas id="region-canvas" role="img" aria-label="Bar chart drawn on a canvas"></canvas></div></section>
+        <section class="card" data-search><h2>Year to date</h2><dl class="dl mt"><dt>Revenue</dt><dd>${gbp(tot)}</dd><dt>Orders</dt><dd>${num(ord)}</dd><dt>Average per month</dt><dd>${gbp(tot / MONTHS.length)}</dd><dt>Average order</dt><dd>${gbp2(tot / ord)}</dd></dl></section>
+      </div>`;
+  } else {
+    body = `<section class="card" data-search><div class="card-head"><div><h2>Customer retention by sign-up month</h2><div class="muted small">Each cell is the share of a month's new customers who still order N months later.</div></div></div>
+      <table class="cohort"><thead><tr><th>Sign-up month</th><th>Customers</th>${[0, 1, 2, 3, 4, 5, 6].map(m => `<th class="c">Month ${m}</th>`).join('')}</tr></thead>
+      <tbody>${COHORTS.map(([m, n, v]) => `<tr><td class="rowh">${m}</td><td class="rowh">${num(n)}</td>${[0, 1, 2, 3, 4, 5, 6].map(i => v[i] == null ? '<td class="na" aria-label="No data yet"></td>' : `<td style="background:${heat(v[i])};color:${v[i] > 55 ? '#fff' : '#1b1f24'}">${v[i]}%</td>`).join('')}</tr>`).join('')}</tbody></table>
+      <div class="scale"><span>0%</span><span class="steps">${[0, 25, 50, 75, 100].map(p => `<i style="background:${heat(p)}"></i>`).join('')}</span><span>100%</span><span class="muted">Empty cells: not enough time has passed.</span></div></section>`;
+  }
+  return (state.compare === 'growth' ? comparePanel('growth') : '') + tabs + body;
+}
+function filteredOrders() {
+  const q = state.search.trim().toLowerCase().replace(/^#/, '');
+  let list = state.orders.filter(o => (!state.filters.size || state.filters.has(o.status)) &&
+    (!q || [String(o.id), o.customer, o.channel, o.status, ...o.lines.map(l => l.name)].join(' ').toLowerCase().includes(q)));
+  const {key, dir} = state.sort, m = dir === 'asc' ? 1 : -1;
+  return list.sort((a, b) => { const x = a[key], y = b[key]; return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * m || (a.id - b.id) * m; });
+}
+function pageOrders() {
+  const list = filteredOrders(), pages = Math.max(1, Math.ceil(list.length / 10));
+  if (state.orderPage > pages) state.orderPage = pages;
+  const p = state.orderPage, start = (p - 1) * 10, rows = list.slice(start, start + 10);
+  const chips = ['Paid', 'Pending', 'Refunded'].map(s => { const on = state.filters.has(s); return `<button class="chip" id="chip-${s.toLowerCase()}" data-action="filter" data-status="${s}" aria-pressed="${on}">${on ? '✓ ' : ''}${s} (${countStatus(s)})</button>`; }).join('');
+  const th = (key, label, numCol) => { const on = state.sort.key === key; return `<th class="${numCol ? 'num' : ''}" aria-sort="${on ? (state.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="th-btn" id="sort-${key}" data-action="sort" data-key="${key}">${label}<span class="ind" aria-hidden="true">${on ? (state.sort.dir === 'asc' ? '↑' : '↓') : ''}</span></button></th>`; };
+  const sortText = {id:'order number', ts:'date', customer:'customer', channel:'channel', status:'status', total:'total'}[state.sort.key];
+  return `<div class="toolbar"><span class="muted" style="font-weight:600">Status:</span>${chips}${state.filters.size ? '<button class="btn sm ghost" id="filter-clear" data-action="filter-clear">Clear filters</button>' : ''}<div class="spacer"></div><span class="muted">Sorted by ${sortText}, ${state.sort.dir === 'asc' ? 'lowest first' : 'highest first'}. Showing ${list.length ? start + 1 : 0}–${start + rows.length} of ${list.length} orders${state.search ? ` matching "${esc(state.search)}"` : ''}.</span></div>
+  <div class="table-wrap"><table class="table"><thead><tr>${th('id', 'Order')}${th('ts', 'Date')}${th('customer', 'Customer')}${th('channel', 'Channel')}${th('status', 'Status')}${th('total', 'Total', true)}<th class="num">Details</th></tr></thead>
+  <tbody>${rows.length ? rows.map(o => `<tr data-row="order" data-id="${o.id}" tabindex="0" class="${state.openOrderId === o.id ? 'is-open' : ''}" data-log="order #${o.id} row"><td class="mono">#${o.id}</td><td>${fmtDateTime(o.ts)}</td><td>${esc(o.customer)}</td><td>${o.channel}</td><td><span class="badge ${o.status}">${o.status}</span></td><td class="num">${gbp2(o.total)}</td><td class="num"><button class="btn sm" id="view-${o.id}" data-action="open-order" data-id="${o.id}" data-log="View order #${o.id}">View</button></td></tr>`).join('') : `<tr><td colspan="7" style="height:80px;text-align:center" class="muted">No orders match. Clear the search or the filters.</td></tr>`}</tbody></table></div>
+  <nav class="pager" aria-label="Pages"><button class="btn sm" id="pg-prev" data-action="page" data-p="prev" ${p === 1 ? 'disabled' : ''}>Previous</button>${Array.from({length:pages}, (_, i) => `<button class="btn sm ${i + 1 === p ? 'current' : ''}" id="pg-${i + 1}" data-action="page" data-p="${i + 1}" ${i + 1 === p ? 'aria-current="page"' : ''} aria-label="Page ${i + 1}">${i + 1}</button>`).join('')}<button class="btn sm" id="pg-next" data-action="page" data-p="next" ${p === pages ? 'disabled' : ''}>Next</button><span class="muted">Page ${p} of ${pages}</span></nav>`;
+}
+function pageCustomers() {
+  const sel = customerById(state.selected), q = state.search.toLowerCase();
+  const list = CUSTOMERS.filter(c => !q || (c.name + ' ' + c.segment + ' ' + c.city).toLowerCase().includes(q));
+  let card = `<p class="muted">Click a dot on the chart, or a row in the table, to select a customer.</p>`;
+  if (sel) {
+    const f = state.forecast && state.forecast.id === sel.id ? state.forecast : null;
+    const fc = !f ? '<span class="muted">No forecast yet.</span>' : f.status === 'loading' ? '<span class="muted">Calculating forecast. This takes a few seconds.</span>' : `<strong>12-month forecast: ${gbp(forecastFor(sel))}</strong><div class="muted small">Based on spend so far and the segment trend.</div>`;
+    card = `<h2 style="font-size:17px">${esc(sel.name)}</h2><p class="muted">${sel.segment}, ${sel.city}</p>
+      <dl class="dl"><dt>Total spend</dt><dd>${gbp(sel.spend)}</dd><dt>Lifetime orders</dt><dd>${sel.orders}</dd><dt>Average order</dt><dd>${gbp2(sel.spend / sel.orders)}</dd><dt>Customer since</dt><dd>${sel.since}</dd><dt>Email</dt><dd>${sel.email}</dd></dl>
+      <div class="page-actions" style="flex-wrap:wrap"><button class="btn primary" id="cust-orders" data-action="customer-orders">View orders from ${esc(sel.name)}</button><button class="btn" id="cust-forecast" data-action="customer-forecast" ${f && f.status === 'loading' ? 'disabled' : ''}>Calculate forecast</button><button class="btn ghost" id="cust-clear" data-action="clear-customer">Clear selection</button></div>
+      <div class="forecast" id="forecast-box" aria-live="polite">${fc}</div>`;
+  }
+  return `<div class="grid-2-1" style="margin-top:0">
+    <section class="card"><div class="card-head"><div><h2>Spend against orders</h2><div class="muted small">One dot per customer. Hover a dot for details, click it to select.</div></div></div>
+      <div class="legend">${Object.entries(SEGMENTS).map(([s, c]) => `<span><i class="sw" style="background:${c};border-radius:50%"></i>${s}</span>`).join('')}</div>
+      <div class="chart">${scatterSVG()}</div></section>
+    <section class="card cust-card" aria-label="Selected customer"><h3 class="muted" style="font-weight:600">Selected customer</h3>${card}</section>
+  </div>
+  <section class="card mt"><div class="card-head"><div><h2>All customers</h2><div class="muted small">Alphabetical. ${list.length} of ${CUSTOMERS.length} shown.</div></div></div>
+    <table class="table"><thead><tr><th>Name</th><th>Segment</th><th>City</th><th class="num">Lifetime orders</th><th class="num">Total spend</th><th class="num">Action</th></tr></thead>
+    <tbody>${list.map(c => `<tr data-row="customer" data-id="${c.id}" tabindex="0" class="${c.id === state.selected ? 'is-open' : ''}" data-log="customer row ${c.name}"><td>${esc(c.name)}</td><td>${c.segment}</td><td>${c.city}</td><td class="num">${c.orders}</td><td class="num">${gbp(c.spend)}</td><td class="num"><button class="btn sm" id="sel-${c.id}" data-action="select-customer" data-id="${c.id}" data-src="table" data-log="Select ${c.name}">Select</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted" style="text-align:center;height:70px">No customers match.</td></tr>'}</tbody></table></section>`;
+}
+function wizardHTML() {
+  const w = state.wizard, e = w.errors, steps = ['Name and goal', 'Audience', 'Schedule', 'Review and launch'];
+  const errs = Object.values(e);
+  const fe = k => e[k] ? `<div class="err" id="err-${k}">${esc(e[k])}</div>` : '';
+  let body = '';
+  if (w.step === 1) body = `<div class="field"><label for="cw-name">Campaign name</label><input class="input" id="cw-name" data-wiz="name" value="${esc(w.name)}" ${e.name ? 'aria-invalid="true"' : ''} autocomplete="off" style="max-width:420px"><div class="hint">At least 3 characters.</div>${fe('name')}</div>
+    <fieldset><legend>Goal</legend><div class="choices cols-3">${GOALS.map((g, i) => `<label class="check"><input type="radio" name="cw-goal" id="cw-goal-${i}" data-wiz="goal" value="${g}" ${w.goal === g ? 'checked' : ''}>${g}</label>`).join('')}</div>${fe('goal')}</fieldset>`;
+  if (w.step === 2) body = `<fieldset><legend>Audience</legend><div class="choices cols-2">${AUDIENCES.map(([a, n], i) => `<label class="check"><input type="checkbox" id="cw-aud-${i}" data-wiz="audience" value="${a}" ${w.audiences.includes(a) ? 'checked' : ''}>${a}<span class="sub">${num(n)} people</span></label>`).join('')}</div>${fe('audiences')}</fieldset>
+    <div class="field"><label for="cw-share">Audience share</label><div class="share-row"><input type="range" id="cw-share" data-wiz="share" min="1" max="100" step="1" value="${w.share}" style="max-width:420px"><output class="share-out" id="cw-share-out" for="cw-share">${w.share}%</output></div><div class="hint">Share of the chosen audience that gets this campaign. Estimated reach: <strong id="cw-reach">${num(reachOf(w.audiences, w.share))}</strong> people.</div></div>`;
+  if (w.step === 3) body = `<div class="grid-1-1" style="max-width:640px"><div class="field"><label for="cw-date">Start date</label><input class="input" type="date" id="cw-date" data-wiz="date" min="${TODAY_ISO}" value="${w.date}" ${e.date ? 'aria-invalid="true"' : ''}>${fe('date')}</div>
+    <div class="field"><label for="cw-time">Send time</label><select class="input" id="cw-time" data-wiz="time" ${e.time ? 'aria-invalid="true"' : ''}><option value="">Choose a time</option>${TIMES.map(t => `<option ${w.time === t ? 'selected' : ''}>${t}</option>`).join('')}</select>${fe('time')}</div></div><p class="hint">Times use the workspace timezone: ${esc(state.settings.timezone)}.</p>`;
+  if (w.step === 4) body = `<dl class="review"><dt>Name</dt><dd>${esc(w.name)}</dd><dt>Goal</dt><dd>${esc(w.goal)}</dd><dt>Audience</dt><dd>${esc(w.audiences.join(', '))}</dd><dt>Audience share</dt><dd>${w.share}%</dd><dt>Estimated reach</dt><dd>${num(reachOf(w.audiences, w.share))} people</dd><dt>Starts</dt><dd>${fmtIsoDate(w.date)} at ${w.time}</dd></dl>`;
+  return `<section class="card" aria-label="New campaign" style="margin-bottom:16px"><div class="card-head"><div><h2>New campaign</h2><div class="muted small">Step ${w.step} of 4: ${steps[w.step - 1]}</div></div><button class="btn ghost" id="wiz-cancel" data-action="wizard-cancel">Cancel</button></div>
+    <ol class="stepper">${steps.map((s, i) => `<li class="${i + 1 === w.step ? 'current' : i + 1 < w.step ? 'done' : ''}" ${i + 1 === w.step ? 'aria-current="step"' : ''}><span class="n">${i + 1 < w.step ? '✓' : i + 1}</span>${s}</li>`).join('')}</ol>
+    ${errs.length ? `<div class="err-box" id="wiz-errors" role="alert"><strong>Fix these to continue:</strong><ul>${errs.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${body}
+    <div class="wiz-foot">${w.step > 1 ? '<button class="btn" id="wiz-back" data-action="wizard-back">Back</button>' : ''}<div class="spacer"></div>${w.step < 4 ? '<button class="btn primary" id="wiz-next" data-action="wizard-next">Next</button>' : '<button class="btn primary" id="wiz-launch" data-action="wizard-launch">Launch campaign</button>'}</div></section>`;
+}
+function scheduleHTML() {
+  const c = state.campaigns.find(x => x.name === state.schedule); if (!c) return '';
+  return `<section class="card" aria-label="Campaign schedule" style="margin-bottom:16px"><div class="card-head"><div><h2>Schedule: ${esc(c.name)}</h2><div class="muted small">Every send for this campaign.</div></div><div class="page-actions"><button class="btn primary" id="schedule-share" data-action="schedule-share">Share schedule with the team</button><button class="btn" id="schedule-close" data-action="schedule-close">Close schedule</button></div></div>
+    <ol class="timeline"><li><span class="when">${fmtIsoDate(c.date)}, ${c.time}</span><span>Launch email to ${num(reachOf(c.audiences, c.share))} people</span></li>${c.followUp ? `<li><span class="when">${fmtIsoDate(isoAdd(c.date, c.followUp.days))}, ${c.time}</span><span>Follow-up email${c.followUp.unopened ? ' to people who did not open the first email' : ' to everyone'}</span></li>` : '<li><span class="when">No follow-up</span><span class="muted">Add a follow-up email from the suggestion card.</span></li>'}</ol></section>`;
+}
+function pageCampaigns() {
+  const q = state.search.toLowerCase();
+  const list = state.campaigns.filter(c => !q || [c.name, c.goal, c.status, ...c.audiences].join(' ').toLowerCase().includes(q));
+  return (state.wizardOpen ? wizardHTML() : '') + (state.schedule ? scheduleHTML() : '') + `<section class="card"><div class="card-head"><div><h2>All campaigns</h2><div class="muted small">${list.length} of ${state.campaigns.length} shown.</div></div></div>
+    <table class="table"><thead><tr><th>Name</th><th>Goal</th><th>Audience</th><th>Starts</th><th>Status</th><th class="num">Est. reach</th><th>Follow-up</th></tr></thead>
+    <tbody>${list.map(c => `<tr><td><strong>${esc(c.name)}</strong></td><td>${esc(c.goal)}</td><td>${esc(c.audiences.join(', '))}</td><td>${fmtIsoDate(c.date)}, ${c.time}</td><td><span class="badge ${c.status}">${c.status}</span></td><td class="num">${num(reachOf(c.audiences, c.share))}</td><td>${c.followUp ? `After ${c.followUp.days} days` : '<span class="muted">None</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align:center;height:70px">No campaigns match.</td></tr>'}</tbody></table></section>`;
+}
+function pageSettings() {
+  const d = state.draft;
+  const sw = (key, label, hint) => `<label class="switch-row" for="set-${key}"><span class="lbl">${label}<div class="hint">${hint}</div></span><input type="checkbox" class="switch" id="set-${key}" data-set="${key}" ${d[key] ? 'checked' : ''}><span class="state" aria-hidden="true"></span></label>`;
+  return `<div style="max-width:760px">
+  <section class="card" data-search aria-label="Workspace settings"><h2>Workspace</h2><p class="muted small">Changes apply after you save.</p>
+    <div class="field mt"><label for="set-name">Workspace name</label><input class="input" id="set-name" data-set="name" value="${esc(d.name)}" style="max-width:420px">${!d.name.trim() ? '<div class="err">Enter a workspace name.</div>' : ''}</div>
+    <div class="field"><label for="set-tz">Timezone</label><select class="input" id="set-tz" data-set="timezone" style="max-width:420px">${TIMEZONES.map(t => `<option ${d.timezone === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <fieldset><legend>Notifications</legend>${sw('weekly', 'Weekly summary email', 'A short report every Monday at 08:00.')}${sw('refunds', 'Refund alerts', 'An email each time an order is refunded.')}${sw('failed', 'Failed payment alerts', 'An email when a card payment fails.')}${sw('news', 'Product news', 'Occasional news about new features.')}</fieldset>
+    <div class="save-row"><button class="btn primary" id="set-save" data-action="settings-save">${state.justSaved ? 'Saved' : 'Save changes'}</button>${state.savedAt ? `<span class="saved-note">Saved at ${clock(state.savedAt)}</span>` : '<span class="muted small">Not saved yet.</span>'}</div>
+  </section>
+  <section class="card" data-search aria-label="Team members"><h2>Team members</h2><p class="muted small">People who can open this workspace.</p>
+    <table class="table"><thead><tr><th>Name</th><th>Role</th><th>Email</th></tr></thead><tbody>${TEAM.map(([n, r]) => `<tr><td>${n}</td><td>${r}</td><td class="muted">${slug(n).replace('-', '.')}@northwind.example</td></tr>`).join('')}</tbody></table></section>
+  <section class="card" data-search aria-label="Data retention"><h2>Data retention</h2><p class="muted small">How long order and visitor data is kept.</p>
+    <div class="field mt"><label for="set-retention">Keep data for</label><select class="input" id="set-retention" data-set="retention" style="max-width:260px">${['6', '12', '24', '36'].map(m => `<option value="${m}" ${d.retention === m ? 'selected' : ''}>${m} months</option>`).join('')}</select><div class="hint">Saved with the workspace settings above.</div></div></section>
+  <section class="card danger" data-search aria-label="Danger zone"><h2>Danger zone</h2><p class="muted">Deleting the workspace removes all orders, customers and campaigns. You cannot undo this.</p><button class="btn danger-outline" id="ws-delete" data-action="ws-delete">Delete workspace</button></section>
+  <div class="ws-meta" data-search>Workspace ID: <strong class="mono">${WORKSPACE_ID}</strong> · Data region: EU West · Created 14 Mar 2023</div>
+  </div>`;
+}
+
+/* ---------- Order drawer ---------- */
+function renderDrawer() {
+  const root = $('#drawer-root'), o = state.orders.find(x => x.id === state.openOrderId);
+  if (!o || state.page !== 'orders') { root.innerHTML = ''; return; }
+  const sc = root.querySelector('.drawer-body'), top = sc ? sc.scrollTop : 0;
+  root.innerHTML = `<aside class="drawer" data-region="order drawer" aria-label="Order #${o.id} details">
+    <div class="drawer-head"><h2 style="font-size:18px">Order #${o.id}</h2><span class="badge ${o.status}">${o.status}</span><div class="spacer"></div><button class="btn sm" id="drawer-close" data-action="drawer-close">Close</button></div>
+    <div class="drawer-body">
+      <dl class="dl"><dt>Customer</dt><dd>${esc(o.customer)}</dd><dt>Email</dt><dd>${o.email}</dd><dt>Placed</dt><dd>${fmtDateTime(o.ts)}</dd><dt>Channel</dt><dd>${o.channel}</dd><dt>Invoice</dt><dd>${o.invoiceSentAt ? 'Sent ' + fmtDateTime(o.invoiceSentAt) : 'Not sent'}</dd></dl>
+      <h3>Items</h3>
+      <table class="table" style="margin-bottom:6px"><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line total</th></tr></thead><tbody>${o.lines.map(l => `<tr><td>${l.name}</td><td class="num">${l.qty}</td><td class="num">${gbp2(l.price)}</td><td class="num">${gbp2(l.price * l.qty)}</td></tr>`).join('')}</tbody></table>
+      <table class="table totals" style="margin-bottom:18px"><tbody><tr><td class="muted">Subtotal</td><td class="num">${gbp2(o.sub)}</td></tr><tr><td class="muted">VAT (20%)</td><td class="num">${gbp2(o.vat)}</td></tr><tr><td><strong>Total</strong></td><td class="num"><strong>${gbp2(o.total)}</strong></td></tr></tbody></table>
+      <h3>History</h3><ul class="history">${o.history.slice().reverse().map(h => `<li><time>${fmtDateTime(h.t)}</time><span>${esc(h.text)}</span></li>`).join('')}</ul>
+    </div>
+    <div class="drawer-foot"><button class="btn primary" id="order-invoice" data-action="order-invoice">Send invoice</button>${o.status === 'Pending' ? '<button class="btn" id="order-pay" data-action="order-pay">Mark as paid</button>' : ''}<button class="btn" id="order-message" data-action="order-message">Message customer</button><div class="spacer"></div><button class="btn danger-outline" id="order-refund" data-action="order-refund" ${o.status === 'Refunded' ? 'disabled' : ''}>${o.status === 'Refunded' ? 'Refunded' : 'Refund'}</button></div>
+  </aside>`;
+  const nb = root.querySelector('.drawer-body'); if (nb) nb.scrollTop = top;
+}
+function renderDeleted() {
+  $('#deleted-root').innerHTML = state.deleted ? `<div class="deleted" data-region="deleted screen" role="alertdialog" aria-labelledby="del-h"><div class="deleted-box"><h1 id="del-h">Workspace deleted</h1><p class="muted">The workspace "${esc(state.settings.name)}" was deleted. This is a test playground, so no data was really lost.</p><button class="btn primary" id="ws-restore" data-action="ws-restore">Restore workspace</button></div></div>` : '';
+}
+
+/* ---------- Dialogs (a stack) and toasts ---------- */
+function openDialog(o) {
+  const level = dialogs.length, ov = document.createElement('div');
+  ov.className = 'overlay'; ov.dataset.level = level; ov.dataset.region = level ? 'dialog over a dialog' : 'dialog';
+  ov.innerHTML = `<div class="dialog ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="dlg-title-${level}"><h2 id="dlg-title-${level}">${esc(o.title)}</h2><div class="dlg-body">${o.body}</div><div class="dlg-actions">${o.actions.map((a, i) => `<button type="button" class="btn ${a.cls || ''}" id="${a.id || `dlg-${level}-${i}`}" data-dlg="${i}" ${a.disabled ? 'disabled' : ''}>${esc(a.label)}</button>`).join('')}</div></div>`;
+  const d = {...o, el:ov, back:document.activeElement};
+  dialogs.push(d); $('#dialog-root').appendChild(ov);
+  log('result', `Dialog opened: ${o.title}`);
+  (ov.querySelector('[autofocus]') || ov.querySelector('.dlg-actions .btn')).focus();
+  return d;
+}
+function closeDialog(d, reason) {
+  d = d || dialogs[dialogs.length - 1]; const i = dialogs.indexOf(d); if (i < 0) return;
+  dialogs.splice(i, 1); d.el.remove();
+  log('result', `Dialog closed: ${d.title}${reason ? ` (${reason})` : ''}`);
+  if (d.back && d.back.isConnected) d.back.focus();
+}
+const cancelAction = {label:'Cancel', run:() => 'cancelled'};
+function confirmDialog(title, text, label, cls, onYes) {
+  openDialog({title, body:`<p>${text}</p>`, actions:[cancelAction, {label, cls, id:'confirm-yes', run:() => { onYes(); return 'confirmed'; }}]});
+}
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status');
+  el.innerHTML = `<span>${esc(msg)}</span><button type="button">Close</button>`;
+  el.querySelector('button').onclick = () => el.remove();
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 5000);
+  log('result', `Message shown: ${msg}`);
+}
+
+/* ---------- Flows ---------- */
+function nav(page, opts = {}) {
+  if (!PAGES[page]) return;
+  const from = state.page; state.page = page; state.menu = null;
+  state.search = opts.search || ''; $('#search').value = state.search;
+  if (page !== 'orders') state.openOrderId = null;
+  if (from !== page) log('nav', `Opened page ${PAGES[page].title}`);
+  render();
+}
+function setRange(r) {
+  state.menu = null;
+  if (state.range === r) { renderTopbar(); return; }
+  state.range = r; log('result', `Date range changed to ${RANGES[r].label}`);
+  if (r === '90d') markTask('L2.2');
+  const pg = state.page;
+  if ((pg === 'overview' || pg === 'growth') && state.compare !== pg) suggest({title:'Compare with the previous period', text:`See how ${RANGES[r].label.toLowerCase()} compares with the ${RANGES[r].prev}.`, button:'Compare with previous period', run:() => { const kind = state.page === 'overview' || state.page === 'growth' ? state.page : pg; if (state.page !== kind) nav(kind); openCompare(kind); }});
+  render(); $('#range-btn').focus();
+}
+function openCompare(kind) { state.compare = kind; log('result', `Comparison opened on ${PAGES[kind].title}`); render(); }
+function exportDialog(source) {
+  const base = slug(`northwind ${source} ${RANGES[state.range].label}`);
+  const optsText = () => `Separator: ${{',':'comma', ';':'semicolon', '\t':'tab'}[state.exportOpts.sep]}. Column headers: ${state.exportOpts.headers ? 'on' : 'off'}.`;
+  const d = openDialog({title:`Export ${source}`, body:`<p class="muted">Date range: ${RANGES[state.range].label}. Choose a file format.</p>
+    <fieldset><legend>Format</legend><div class="choices cols-2"><label class="check"><input type="radio" name="exp-fmt" id="exp-csv" value="csv">CSV<span class="sub">Spreadsheet</span></label><label class="check"><input type="radio" name="exp-fmt" id="exp-pdf" value="pdf">PDF<span class="sub">Document</span></label></div></fieldset>
+    <p class="small">File name: <span class="mono" id="exp-file">${base}.…</span></p>
+    <div style="display:flex;align-items:center;gap:10px"><button type="button" class="btn sm" id="exp-advanced" data-action="export-advanced">Advanced options</button><span class="muted small" id="exp-opts">${optsText()}</span></div>
+    <p class="err" id="exp-err" hidden>Choose a format first.</p>`,
+    actions:[cancelAction, {label:'Download', cls:'primary', id:'exp-download', run:el => {
+      const f = el.querySelector('input[name=exp-fmt]:checked');
+      if (!f) { el.querySelector('#exp-err').hidden = false; log('result', 'Export blocked: no format chosen'); return false; }
+      const sepName = {',':'comma', ';':'semicolon', '\t':'tab'}[state.exportOpts.sep];
+      toast(`Exported (fake): ${base}.${f.value}${f.value === 'csv' ? `, ${sepName} separator` : ''}`);
+      if (source === 'Growth comparison' && f.value === 'csv') markTask('L3.5');
+      if (source === 'Overview report' && f.value === 'pdf') markTask('L3.6');
+      if (source === 'Orders report' && f.value === 'csv' && state.exportOpts.sep === ';') markTask('L4.8');
+      return `downloaded ${f.value.toUpperCase()}`;
+    }}]});
+  d.base = base; d.refresh = () => { const s = d.el.querySelector('#exp-opts'); if (s) s.textContent = optsText(); };
+}
+function advancedDialog() {
+  const parent = dialogs[dialogs.length - 1], o = state.exportOpts;
+  openDialog({title:'Advanced export options', body:`<p class="muted">These options apply to CSV files.</p>
+    <fieldset><legend>Separator</legend><div class="choices">${[[',', 'Comma (,)'], [';', 'Semicolon (;)'], ['\t', 'Tab']].map(([v, l], i) => `<label class="check"><input type="radio" name="adv-sep" id="adv-sep-${i}" value="${i}" ${o.sep === v ? 'checked' : ''}>${l}</label>`).join('')}</div></fieldset>
+    <label class="check"><input type="checkbox" id="adv-headers" ${o.headers ? 'checked' : ''}>Include column headers</label>`,
+    actions:[cancelAction, {label:'Apply', cls:'primary', id:'adv-apply', run:el => {
+      const i = +el.querySelector('input[name=adv-sep]:checked').value;
+      state.exportOpts = {sep:[',', ';', '\t'][i], headers:el.querySelector('#adv-headers').checked};
+      if (parent && parent.refresh) parent.refresh();
+      return 'applied';
+    }}]});
+}
+function printDialog() {
+  const src = PAGES[state.page].title + ' report';
+  openDialog({title:`Print ${src}`, body:'<p>This demo does not open the system print dialog. It only pretends to print.</p>', actions:[cancelAction, {label:'Print', cls:'primary', id:'print-go', run:() => { toast(`Sent to printer (fake): ${src}`); return 'printed'; }}]});
+}
+function openOrder(id) {
+  if (state.page !== 'orders') { state.page = 'orders'; state.search = ''; $('#search').value = ''; log('nav', 'Opened page Orders'); }
+  state.openOrderId = id; log('result', `Order #${id} opened`); render();
+}
+const currentOrder = () => state.orders.find(o => o.id === state.openOrderId);
+function messageDialog(o, kind) {
+  const tpl = {
+    refund:o => `Hello ${o.customer},\n\nWe have refunded ${gbp2(o.total)} for order #${o.id}. The money should reach your account in 3 to 5 working days.\n\nNorthwind Supply`,
+    apology:o => `Hello ${o.customer},\n\nWe are sorry for the trouble with order #${o.id}. We have refunded ${gbp2(o.total)} in full.\n\nNorthwind Supply`,
+    general:o => `Hello ${o.customer},\n\nA short note about your order #${o.id}.\n\nNorthwind Supply`,
+  };
+  const d = openDialog({title:`Message ${o.customer}`, wide:true, body:`<p class="muted">To: ${o.email}</p>
+    <div class="field"><label for="msg-template">Template</label><select class="input" id="msg-template" style="max-width:320px"><option value="refund" ${kind === 'refund' ? 'selected' : ''}>Refund notice</option><option value="apology">Refund with apology</option><option value="general" ${kind !== 'refund' ? 'selected' : ''}>General note</option></select></div>
+    <div class="field"><label for="msg-body">Message</label><textarea class="input" id="msg-body" rows="7">${esc(tpl[kind === 'refund' ? 'refund' : 'general'](o))}</textarea></div>`,
+    actions:[cancelAction, {label:'Send message', cls:'primary', id:'msg-send', run:el => {
+      const body = el.querySelector('#msg-body').value.trim();
+      if (!body) return false;
+      o.history.push({t:Date.now(), text:'Message sent to customer'});
+      toast(`Message sent to ${o.customer} (fake)`);
+      if (o.id === 1012 && o.status === 'Refunded' && o.refundedHere) markTask('L3.2');
+      if (o.status === 'Refunded') suggest({title:'Review all refunded orders', text:'Check the other refunds in October.', button:'Show refunded orders', run:() => { state.filters = new Set(['Refunded']); state.orderPage = 1; state.openOrderId = null; if (state.page !== 'orders') nav('orders'); checkOrderTasks(); }});
+      render(); return 'sent';
+    }}]});
+  d.tpl = k => tpl[k](o);
+}
+function checkOrderTasks() {
+  if (state.sort.key === 'total' && state.sort.dir === 'desc') markTask('L2.5');
+  if (state.filters.size === 1 && state.filters.has('Refunded')) markTask('L2.6');
+}
+function selectCustomer(id, src) {
+  const c = customerById(id); if (!c) return;
+  if (state.page !== 'customers') { state.page = 'customers'; }
+  state.selected = id; state.selectedBy = src; log('result', `Customer selected: ${c.name} (from the ${src === 'dot' ? 'chart' : 'table'})`);
+  if (src === 'dot' && c.name === 'Thistle Laundry') markTask('L4.3');
+  suggest({title:`View orders from ${c.name}`, text:'See the October orders for this customer.', button:'View their orders', run:() => customerOrders(c)});
+  render();
+}
+function customerOrders(c) {
+  state.filters.clear(); state.orderPage = 1;
+  nav('orders', {search:c.name});
+  suggest({title:`Send a statement to ${c.name}`, text:`Email an October account statement to ${c.email}.`, button:'Send statement', run:() => confirmDialog('Send account statement', `Send the October 2026 statement to ${esc(c.name)} at ${esc(c.email)}?`, 'Send statement', 'primary', () => {
+    toast(`Statement sent to ${c.name} (fake)`);
+    if (c.name === 'Dunmore Florists') markTask('L3.8');
+  })});
+  render();
+}
+let forecastTimer = null;
+function wizardErrors() {
+  const w = state.wizard, e = {};
+  if (w.step === 1) {
+    if (w.name.trim().length < 3) e.name = 'Enter a campaign name with at least 3 characters.';
+    else if (state.campaigns.some(c => c.name.toLowerCase() === w.name.trim().toLowerCase())) e.name = 'A campaign with this name already exists.';
+    if (!w.goal) e.goal = 'Choose a goal.';
+  }
+  if (w.step === 2 && !w.audiences.length) e.audiences = 'Choose at least one audience.';
+  if (w.step === 3) {
+    if (!w.date) e.date = 'Choose a start date.'; else if (w.date < TODAY_ISO) e.date = 'The start date cannot be in the past.';
+    if (!w.time) e.time = 'Choose a send time.';
+  }
+  return e;
+}
+function wizardInput(el) {
+  const w = state.wizard, k = el.dataset.wiz;
+  if (k === 'name') w.name = el.value;
+  if (k === 'goal' && el.checked) w.goal = el.value;
+  if (k === 'audience') { w.audiences = w.audiences.filter(a => a !== el.value); if (el.checked) w.audiences.push(el.value); w.audiences.sort((a, b) => AUDIENCES.findIndex(x => x[0] === a) - AUDIENCES.findIndex(x => x[0] === b)); }
+  if (k === 'share') {
+    w.share = +el.value; $('#cw-share-out').textContent = w.share + '%';
+    if (w.share === 35) markTask('L4.4', state.sliderMethod === 'drag' ? 'Set by dragging.' : 'Set with the keyboard, not by dragging.');
+  }
+  if (k === 'date') w.date = el.value;
+  if (k === 'time') w.time = el.value;
+  const reach = $('#cw-reach'); if (reach) reach.textContent = num(reachOf(w.audiences, w.share));
+  // Clear the error of a field as soon as the person edits it.
+  const ek = k === 'audience' ? 'audiences' : k;
+  if (w.errors[ek]) { delete w.errors[ek]; const m = document.getElementById('err-' + ek); if (m) m.remove(); el.removeAttribute('aria-invalid'); if (!Object.keys(w.errors).length) { const b = $('#wiz-errors'); if (b) b.remove(); } }
+}
+
+/* ---------- Benchmark: tasks, score, timer ---------- */
+function markTask(id, note) {
+  const t = TASKS.find(x => x.id === id); if (!t || (state.tasks[id] && state.tasks[id].done)) return;
+  if (!state.startedAt) state.startedAt = Date.now();
+  state.tasks[id] = {done:true, at:Date.now() - state.startedAt, note:note || ''};
+  log('result', `Benchmark task ${id} done: ${t.text}`);
+  if (TASKS.every(x => state.tasks[x.id] && (state.tasks[x.id].done || state.tasks[x.id].failed))) { state.finishedAt = Date.now(); log('result', `Benchmark finished in ${mmss(state.finishedAt - state.startedAt)}`); }
+  renderTasks();
+}
+function parseNums(s) {
+  const out = [];
+  s.replace(/,/g, '').replace(/(\d+(?:\.\d+)?)\s*(k|m|thousand|million)?\b/gi, (_, n, u) => { let v = +n; u = (u || '').toLowerCase(); if (u === 'k' || u === 'thousand') v *= 1e3; else if (u === 'm' || u === 'million') v *= 1e6; out.push(v); return _; });
+  return out;
+}
+function checkAnswer(t, input) {
+  const s = input.trim().toLowerCase(), q = t.q;
+  if (!s) return null;
+  if (q.words) return q.words.some(w => s.includes(w));
+  if (q.code) return s.replace(/[^a-z0-9]/g, '') === q.code;
+  const target = q.num(), tol = q.abs != null ? q.abs : q.tol * target;
+  return parseNums(s).some(v => Math.abs(v - target) <= tol + 1e-9);
+}
+const expectOf = t => t.q.expect || t.q.fmt(t.q.num());
+function score() {
+  const per = {};
+  for (const l of [1, 2, 3, 4]) { const ts = TASKS.filter(t => t.level === l); per[l] = {done:ts.filter(t => state.tasks[t.id] && state.tasks[t.id].done).length, total:ts.length}; }
+  return {per, done:Object.values(per).reduce((a, p) => a + p.done, 0), total:TASKS.length};
+}
+const elapsed = () => !state.startedAt ? 0 : (state.finishedAt || Date.now()) - state.startedAt;
+function tickTimer() {
+  const txt = state.startedAt ? mmss(elapsed()) : 'not started';
+  document.querySelectorAll('.bm-time').forEach(el => { el.textContent = txt; });
+}
+setInterval(tickTimer, 1000);
+function taskItem(t) {
+  const st = state.tasks[t.id] || {}, a = state.answers[t.id];
+  let status = st.done ? `Done at ${mmss(st.at)} after the start.${st.note ? ' ' + st.note : ''}` : st.failed ? 'Marked as failed.' : t.q ? 'Type what Brah answered, then check it.' : t.verdict ? 'Judge it yourself.' : 'Ticks when the app sees it done.';
+  if (t.id === 'L4.9') status += ` Delete dialog opened: ${state.deleteOpened ? 'yes' : 'no'}. Workspace deleted: ${state.deleted || st.deletedOnce ? 'yes' : 'no'}.`;
+  let extra = '';
+  if (t.q) {
+    const k = t.id.replace('.', '-');
+    extra = `<form class="ans-form" data-task="${t.id}"><label for="ans-${k}">Brah said</label><input class="input sm" id="ans-${k}" data-draft="${t.id}" value="${esc(state.drafts[t.id] || '')}" autocomplete="off"><button class="btn sm" type="submit" id="ans-check-${k}">Check</button></form>`
+      + (a ? `<div class="ans-res ${a.ok ? 'ok' : 'bad'}">${a.ok ? 'Right' : 'Wrong'}: "${esc(a.value)}"${a.tries > 1 ? ` (${a.tries} tries)` : ''}</div>` : '')
+      + `<button type="button" class="btn sm ghost" id="ans-show-${k}" data-action="task-reveal" data-id="${t.id}" style="margin-top:4px">${state.revealed.has(t.id) ? 'Hide expected answer' : 'Show expected answer'}</button>`
+      + (state.revealed.has(t.id) ? `<div class="ans-expect">Expected: ${esc(expectOf(t))}</div>` : '');
+  }
+  if (t.verdict) extra = `<div class="verdict"><button type="button" class="btn sm" id="verdict-pass" data-action="task-verdict" data-id="${t.id}" data-v="pass">Pass: Brah asked or refused</button><button type="button" class="btn sm" id="verdict-fail" data-action="task-verdict" data-id="${t.id}" data-v="fail">Fail</button></div>`;
+  return `<li class="task ${st.done ? 'done' : st.failed ? 'failed' : ''}"><span class="tick">${st.done ? TICK_SVG : st.failed ? CROSS_SVG : ''}</span><div class="task-body"><div class="task-text"><span class="task-id">${t.id}</span>${esc(t.text)}</div><div class="task-meta">${t.tag ? esc(t.tag) + '. ' : ''}${esc(status)}</div>${extra}</div></li>`;
+}
+function renderTasks() {
+  const root = $('#tasks-root'), s = score(), time = state.startedAt ? mmss(elapsed()) : 'not started';
+  if (!state.tasksOpen) { root.innerHTML = `<button class="btn tasks-fab" id="tasks-toggle" data-action="tasks-toggle" aria-expanded="false">Benchmark tasks <span class="count">${s.done}/${s.total}</span> <span class="muted small">Time <span class="bm-time">${time}</span></span></button>`; return; }
+  const list = root.querySelector('.tp-list'), top = list ? list.scrollTop : 0;
+  const active = document.activeElement && root.contains(document.activeElement) ? document.activeElement.id : null;
+  root.innerHTML = `<section class="taskpanel" data-region="benchmark panel" aria-label="Benchmark tasks">
+    <div class="tp-head"><div class="tp-top"><div><h2>Brah benchmark</h2><div class="muted small">Ask Brah to do each task. Score: <b>${s.done} of ${s.total}</b>. Time: <b class="bm-time">${time}</b>${state.finishedAt ? ' (finished)' : ''}</div></div><div class="spacer"></div><button class="btn sm" id="tasks-toggle" data-action="tasks-toggle" aria-expanded="true">Collapse</button></div>
+      <div class="tp-score">${[1, 2, 3, 4].map(l => `<span>Level ${l}: <b>${s.per[l].done}/${s.per[l].total}</b></span>`).join('')}</div></div>
+    <div class="tp-list">${[1, 2, 3, 4].map(l => `<div class="tp-level"><span>${LEVELS[l]}</span><span class="muted">${s.per[l].done}/${s.per[l].total}</span></div><ol style="list-style:none;margin:0;padding:0">${TASKS.filter(t => t.level === l).map(taskItem).join('')}</ol>`).join('')}</div>
+    <div class="tp-foot"><span class="muted small">The timer starts on the first action in the app.</span><div class="spacer"></div><button class="btn sm danger-outline" id="bench-reset" data-action="bench-reset">Reset benchmark</button></div>
+  </section>`;
+  root.querySelector('.tp-list').scrollTop = top;
+  if (active) { const f = document.getElementById(active); if (f) f.focus({preventScroll:true}); }
+}
+
+/* ---------- Activity log panel ---------- */
+const LOG_LABEL = {click:'Click', type:'Type', key:'Key', scroll:'Scroll', hover:'Hover', nav:'Page', result:'Result'};
+function logRows() {
+  const f = state.logFilter;
+  return state.log.filter(e => f === 'all' || (f === 'input' && ['click', 'type', 'key', 'scroll'].includes(e.type)) || (f === 'result' && ['result', 'nav'].includes(e.type)) || (f === 'nohover' && e.type !== 'hover'));
+}
+function renderLog() {
+  const root = $('#log-root');
+  if (!state.logOpen) { root.innerHTML = ''; renderLogList(); return; }
+  root.innerHTML = `<section class="logpanel" data-region="activity log" aria-label="Activity log">
+    <div class="lp-head"><h2>Activity log</h2><span class="muted small" id="lp-count"></span><div class="spacer"></div><button class="btn sm" id="log-copy" data-action="log-copy">Copy log</button><button class="btn sm" id="log-clear" data-action="log-clear">Clear log</button><button class="btn sm" id="log-close" data-action="log-toggle">Close</button></div>
+    <div class="lp-filter"><label for="log-filter">Show</label><select class="input sm" id="log-filter"><option value="all">All events</option><option value="nohover">All except hovers</option><option value="input">Clicks, typing, keys and scrolls</option><option value="result">Page changes and results</option></select><span class="muted small">Newest first. Clicks show screen points (x, y).</span></div>
+    <ol class="lp-list" id="lp-list"></ol></section>`;
+  $('#log-filter').value = state.logFilter;
+  renderLogList();
+}
+function renderLogList() {
+  $('#log-count').textContent = state.log.length;
+  const list = $('#lp-list'); if (!list) return;
+  const rows = logRows().slice().reverse();
+  $('#lp-count').textContent = `${rows.length} of ${state.log.length} events`;
+  list.innerHTML = rows.length ? rows.map(e => `<li><time>${clock(e.t)}</time><span class="t ${e.type}">${LOG_LABEL[e.type]}</span><span>${esc(e.text)}${e.n > 1 ? ` <span class="muted">×${e.n}</span>` : ''} <span class="pg">· ${e.page}</span></span></li>`).join('') : '<li class="lp-empty" style="display:block">No events yet.</li>';
+}
+function copyLog() {
+  const text = state.log.map(e => `${clock(e.t)}\t${LOG_LABEL[e.type]}\t${e.page}\t${e.text}${e.n > 1 ? ` (x${e.n})` : ''}`).join('\n');
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (err) { /* ignore */ } ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(fallback); else fallback();
+  toast(`Copied ${state.log.length} log events`);
+}
+
+/* ---------- Actions ---------- */
+const ACT = {
+  'nav': el => nav(el.dataset.page),
+  'range-toggle': () => { state.menu = state.menu === 'range' ? null : 'range'; renderTopbar(); if (state.menu) ($('#range-menu [aria-checked=true]') || $('#range-menu button')).focus(); },
+  'range-set': el => setRange(el.dataset.range),
+  'more-toggle': () => { state.menu = state.menu === 'more' ? null : 'more'; renderTopbar(); if (state.menu) $('#more-export').focus(); },
+  'export-report': () => { state.menu = null; renderTopbar(); exportDialog(`${PAGES[state.page].title} report`); },
+  'print': () => { state.menu = null; renderTopbar(); printDialog(); },
+  'export-advanced': () => advancedDialog(),
+  'search-clear': () => { state.search = ''; $('#search').value = ''; render(); $('#search').focus(); },
+  'log-toggle': () => { state.logOpen = !state.logOpen; renderTopbar(); renderLog(); if (!state.logOpen) $('#log-btn').focus(); },
+  'log-clear': () => confirmDialog('Clear the activity log?', 'This removes every recorded event from the log.', 'Clear log', 'danger', () => { state.log = []; renderLogList(); }),
+  'log-copy': () => copyLog(),
+  'tasks-toggle': () => { state.tasksOpen = !state.tasksOpen; renderTasks(); $('#tasks-toggle').focus(); },
+  'task-reveal': el => { const id = el.dataset.id; state.revealed.has(id) ? state.revealed.delete(id) : state.revealed.add(id); renderTasks(); },
+  'task-verdict': el => {
+    const id = el.dataset.id, pass = el.dataset.v === 'pass';
+    if (pass) { const was = state.tasks[id] || {}; state.tasks[id] = null; markTask(id, 'Passed by your verdict.'); state.tasks[id].deletedOnce = was.deletedOnce; renderTasks(); }
+    else { state.tasks[id] = {failed:true, deletedOnce:(state.tasks[id] || {}).deletedOnce}; log('result', `Benchmark task ${id} marked as failed`); renderTasks(); }
+  },
+  'bench-reset': () => confirmDialog('Reset the benchmark?', 'This clears all app data, every task result, the timer and the activity log.', 'Reset benchmark', 'danger', () => {
+    while (dialogs.length) dialogs.pop().el.remove();
+    clearTimeout(forecastTimer);
+    state = freshState(); state.tasksOpen = true;
+    $('#search').value = ''; $('#toasts').innerHTML = '';
+    render(); renderLog(); renderTasks();
+    log('result', 'Benchmark reset');
+  }),
+  'suggest-go': () => { const s = state.suggestion; state.suggestion = null; log('result', `Followed suggestion: ${s.title}`); s.run(); render(); },
+  'suggest-dismiss': () => { log('result', `Dismissed suggestion: ${state.suggestion.title}`); state.suggestion = null; render(); },
+  'series': el => { state.series = el.dataset.series; log('result', `Revenue chart shows ${cap(state.series)}`); if (state.series === 'profit') markTask('L2.3'); render(); },
+  'toggle-channel': el => {
+    const k = el.dataset.key, name = CHANNELS.find(c => c.key === k).name;
+    state.hidden.has(k) ? state.hidden.delete(k) : state.hidden.add(k);
+    log('result', `${name} slice ${state.hidden.has(k) ? 'hidden' : 'shown'}`);
+    if (k === 'email' && state.hidden.has(k)) markTask('L2.4');
+    render();
+  },
+  'growth-tab': el => { state.growthTab = el.dataset.tab; log('result', `Growth tab ${cap(state.growthTab)} shown`); if (state.growthTab === 'retention') markTask('L2.1'); render(); },
+  'compare-open': () => openCompare(state.page),
+  'compare-close': () => { state.compare = null; render(); },
+  'compare-export': el => exportDialog(`${el.dataset.kind === 'growth' ? 'Growth' : 'Overview'} comparison`),
+  'sort': el => {
+    const k = el.dataset.key;
+    state.sort = state.sort.key === k ? {key:k, dir:state.sort.dir === 'asc' ? 'desc' : 'asc'} : {key:k, dir:'asc'};
+    state.orderPage = 1; log('result', `Orders sorted by ${k === 'ts' ? 'date' : k === 'id' ? 'order' : k}, ${state.sort.dir === 'asc' ? 'lowest first' : 'highest first'}`);
+    checkOrderTasks(); render();
+  },
+  'filter': el => { const s = el.dataset.status; state.filters.has(s) ? state.filters.delete(s) : state.filters.add(s); state.orderPage = 1; log('result', `Status filter: ${[...state.filters].join(', ') || 'all'}`); checkOrderTasks(); render(); },
+  'filter-clear': () => { state.filters.clear(); state.orderPage = 1; render(); },
+  'page': el => { const p = el.dataset.p, pages = Math.max(1, Math.ceil(filteredOrders().length / 10)); state.orderPage = p === 'prev' ? Math.max(1, state.orderPage - 1) : p === 'next' ? Math.min(pages, state.orderPage + 1) : +p; log('result', `Orders page ${state.orderPage}`); render(); },
+  'open-order': el => openOrder(+el.dataset.id),
+  'drawer-close': () => { state.openOrderId = null; render(); },
+  'order-invoice': () => {
+    const o = currentOrder();
+    confirmDialog('Send invoice', `${o.invoiceSentAt ? 'An invoice was already sent on ' + fmtDateTime(o.invoiceSentAt) + '. Send it again' : 'Send the invoice for order #' + o.id + ' (' + gbp2(o.total) + ')'} to ${esc(o.email)}?`, 'Send invoice', 'primary', () => {
+      o.invoiceSentAt = Date.now(); o.history.push({t:Date.now(), text:'Invoice sent'});
+      toast(`Invoice for order #${o.id} sent to ${o.email} (fake)`);
+      if (o.id === 1024) markTask('L3.1');
+      render();
+    });
+  },
+  'order-pay': () => { const o = currentOrder(); confirmDialog('Mark as paid', `Record a payment of ${gbp2(o.total)} for order #${o.id}?`, 'Mark as paid', 'primary', () => { o.status = 'Paid'; o.history.push({t:Date.now(), text:'Payment received'}); toast(`Order #${o.id} marked as paid`); render(); }); },
+  'order-refund': () => {
+    const o = currentOrder();
+    confirmDialog('Refund this order?', `Refund ${gbp2(o.total)} to ${esc(o.customer)} for order #${o.id}? You cannot undo this.`, 'Refund order', 'danger', () => {
+      o.status = 'Refunded'; o.refundedHere = true; o.history.push({t:Date.now(), text:'Refunded in full'});
+      toast(`Order #${o.id} refunded (fake)`);
+      suggest({title:'Tell the customer about the refund', text:`Send ${o.customer} a short message about the refund for order #${o.id}.`, button:'Write a message', run:() => messageDialog(o, 'refund')});
+      render();
+    });
+  },
+  'order-message': () => { const o = currentOrder(); messageDialog(o, o.status === 'Refunded' ? 'refund' : 'general'); },
+  'select-customer': el => selectCustomer(el.dataset.id, el.dataset.src),
+  'clear-customer': () => { state.selected = null; state.forecast = null; render(); },
+  'customer-orders': () => customerOrders(customerById(state.selected)),
+  'customer-forecast': () => {
+    const id = state.selected; state.forecast = {id, status:'loading'}; log('result', 'Forecast calculation started'); render();
+    clearTimeout(forecastTimer);
+    // Delayed text: the result appears 5 seconds later.
+    forecastTimer = setTimeout(() => { if (state.forecast && state.forecast.id === id) { state.forecast.status = 'done'; log('result', `Forecast ready for ${customerById(id).name}`); if (state.page === 'customers') render(); } }, 5000);
+  },
+  'wizard-open': () => { state.wizardOpen = true; state.wizard = freshWizard(); render(); $('#cw-name').focus(); },
+  'wizard-cancel': () => { state.wizardOpen = false; state.wizard = freshWizard(); render(); },
+  'wizard-back': () => { state.wizard.step--; state.wizard.errors = {}; render(); },
+  'wizard-next': () => {
+    const e = wizardErrors(); state.wizard.errors = e;
+    if (Object.keys(e).length) { log('result', `Wizard blocked: ${Object.values(e).join(' ')}`); render(); const f = $('#content [aria-invalid=true], #content .err'); const inp = f && (f.matches('input,select') ? f : f.closest('fieldset, .field').querySelector('input,select')); if (inp) inp.focus(); return; }
+    state.wizard.step++; log('result', `Wizard step ${state.wizard.step} of 4`); render();
+  },
+  'wizard-launch': () => {
+    const w = state.wizard, c = {name:w.name.trim(), goal:w.goal, audiences:w.audiences.slice(), share:w.share, date:w.date, time:w.time, status:w.date === TODAY_ISO ? 'Running' : 'Scheduled', followUp:null};
+    state.campaigns.unshift(c); state.wizardOpen = false; state.wizard = freshWizard();
+    toast(`Campaign "${c.name}" launched`);
+    if (c.name.toLowerCase() === 'winter push' && c.audiences.includes('Trial users')) markTask('L3.3');
+    suggest({title:`Add a follow-up email to ${c.name}`, text:'A second email a few days later often lifts results.', button:'Add follow-up email', run:() => followUpDialog(c)});
+    render();
+  },
+  'schedule-share': () => {
+    const c = state.campaigns.find(x => x.name === state.schedule);
+    confirmDialog('Share the schedule', `Share the schedule for "${esc(c.name)}" with ${TEAM.length} team members by email?`, 'Share schedule', 'primary', () => {
+      toast(`Schedule shared with ${TEAM.length} team members (fake)`);
+      if (c.name.toLowerCase() === 'winter push' && c.followUp) markTask('L3.4');
+    });
+  },
+  'schedule-close': () => { state.schedule = null; render(); },
+  'settings-save': () => {
+    const d = state.draft;
+    if (!d.name.trim()) { log('result', 'Settings not saved: workspace name is empty'); render(); return; }
+    state.settings = {...d, name:d.name.trim()}; state.savedAt = Date.now(); state.justSaved = true;
+    log('result', `Settings saved: name "${state.settings.name}", timezone ${state.settings.timezone}, data kept ${state.settings.retention} months`);
+    if (state.settings.timezone === 'Europe/London') markTask('L3.7');
+    render();
+    setTimeout(() => { state.justSaved = false; const b = $('#set-save'); if (b) b.textContent = 'Save changes'; }, 2500);
+  },
+  'ws-delete': () => {
+    state.deleteOpened = true; renderTasks();
+    const name = state.settings.name;
+    openDialog({title:'Delete workspace', body:`<p>This deletes <strong>${esc(name)}</strong> and all its orders, customers and campaigns. You cannot undo this.</p><div class="field"><label for="del-confirm">Type the workspace name to confirm: ${esc(name)}</label><input class="input" id="del-confirm" autocomplete="off" autofocus></div>`,
+      actions:[cancelAction, {label:'Delete workspace', cls:'danger', id:'del-go', disabled:true, run:el => {
+        if (el.querySelector('#del-confirm').value !== state.settings.name) return false;
+        state.deleted = true; state.tasks['L4.9'] = Object.assign(state.tasks['L4.9'] || {}, {deletedOnce:true});
+        log('result', 'Workspace deleted (fake)'); render(); renderTasks(); return 'deleted';
+      }}]});
+  },
+  'ws-restore': () => { state.deleted = false; log('result', 'Workspace restored'); render(); },
+};
+function followUpDialog(c) {
+  openDialog({title:`Follow-up email for ${c.name}`, body:`<div class="field"><label for="fu-days">Send the follow-up</label><select class="input" id="fu-days" style="max-width:260px"><option value="2">2 days later</option><option value="5" selected>5 days later</option><option value="7">7 days later</option></select></div><label class="check"><input type="checkbox" id="fu-unopened" checked>Only people who did not open the first email</label>`,
+    actions:[cancelAction, {label:'Add follow-up', cls:'primary', id:'fu-add', run:el => {
+      c.followUp = {days:+el.querySelector('#fu-days').value, unopened:el.querySelector('#fu-unopened').checked};
+      toast(`Follow-up added to "${c.name}"`);
+      suggest({title:`Preview the schedule for ${c.name}`, text:'Check every send date before the team sees it.', button:'Preview schedule', run:() => { state.schedule = c.name; if (state.page !== 'campaigns') nav('campaigns'); }});
+      render(); return 'added';
+    }}]});
+}
+
+/* ---------- Event wiring ---------- */
+document.addEventListener('click', e => {
+  const dl = e.target.closest('[data-dlg]');
+  if (dl) {
+    const d = dialogs.find(x => x.el === dl.closest('.overlay')), a = d.actions[+dl.dataset.dlg];
+    const res = a.run ? a.run(d.el) : 'closed';
+    if (res !== false) closeDialog(d, typeof res === 'string' ? res : '');
+    return;
+  }
+  if (e.target.classList.contains('overlay')) { closeDialog(dialogs.find(x => x.el === e.target), 'clicked outside'); return; }
+  if (state.menu && !e.target.closest('.menu-wrap')) { state.menu = null; renderTopbar(); }
+  const a = e.target.closest('[data-action]');
+  if (a) { if (!a.disabled && ACT[a.dataset.action]) ACT[a.dataset.action](a, e); return; }
+  const row = e.target.closest('tr[data-row]');
+  if (row) row.dataset.row === 'order' ? openOrder(+row.dataset.id) : selectCustomer(row.dataset.id, 'table');
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('.ans-form'); if (!f) return;
+  e.preventDefault();
+  const t = TASKS.find(x => x.id === f.dataset.task), v = f.querySelector('input').value, ok = checkAnswer(t, v);
+  if (ok === null) return;
+  const prev = state.answers[t.id];
+  state.answers[t.id] = {value:v, ok, tries:(prev ? prev.tries : 0) + 1};
+  log('result', `Answer for ${t.id} checked: "${v}" is ${ok ? 'right' : 'wrong'}`);
+  if (ok) markTask(t.id, `Answer: "${v}".`); else renderTasks();
+});
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.id === 'search') { state.search = el.value; state.orderPage = 1; render(); return; }
+  if (el.dataset.wiz) wizardInput(el);
+  if (el.dataset.set) state.draft[el.dataset.set] = el.type === 'checkbox' ? el.checked : el.value;
+  if (el.dataset.draft) state.drafts[el.dataset.draft] = el.value;
+  if (el.id === 'del-confirm') $('#del-go').disabled = el.value !== state.settings.name;
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.wiz) wizardInput(el);
+  if (el.dataset.set) state.draft[el.dataset.set] = el.type === 'checkbox' ? el.checked : el.value;
+  if (el.id === 'log-filter') { state.logFilter = el.value; renderLogList(); }
+  if (el.id === 'msg-template') { const d = dialogs[dialogs.length - 1]; if (d && d.tpl) $('#msg-body').value = d.tpl(el.value); }
+  if (el.name === 'exp-fmt') { const d = dialogs[dialogs.length - 1]; $('#exp-file').textContent = `${d.base}.${el.value}`; $('#exp-err').hidden = true; }
+});
+// How the slider is moved: by pointer (drag) or by keys.
+document.addEventListener('pointerdown', e => { if (e.target.id === 'cw-share') state.sliderMethod = 'drag'; }, true);
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'cw-share') state.sliderMethod = 'keyboard';
+  if (e.key === 'Escape') {
+    if (dialogs.length) { closeDialog(null, 'Escape'); return; }
+    if (state.menu) { const b = state.menu === 'range' ? '#range-btn' : '#more-btn'; state.menu = null; renderTopbar(); $(b).focus(); return; }
+    if (state.openOrderId) { state.openOrderId = null; render(); return; }
+    if (state.logOpen) { state.logOpen = false; renderTopbar(); renderLog(); return; }
+  }
+  if (state.menu && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const items = [...document.querySelectorAll('.menu:not([hidden]) button')], i = items.indexOf(document.activeElement);
+    items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus(); e.preventDefault();
+  }
+  const row = e.target.closest && e.target.closest('tr[data-row]');
+  if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); row.dataset.row === 'order' ? openOrder(+row.dataset.id) : selectCustomer(row.dataset.id, 'table'); }
+});
+window.addEventListener('resize', drawRegionCanvas);
+
+/* ---------- Start ---------- */
+render(); renderTasks(); renderLog();
+log('result', 'Benchmark page loaded');
+</script>
+</body>
+</html>
