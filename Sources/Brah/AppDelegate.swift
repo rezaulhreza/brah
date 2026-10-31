@@ -1058,8 +1058,8 @@ extension AppDelegate {
         "Which month had the highest revenue? Show me on the chart.",
         "Switch the date range to Last 90 days.",
         "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
-        "Create a campaign named Winter Push for trial users, and launch it.",
-        "Find order 1024 and send its invoice.",
+        "Create a campaign named Winter Push for Trial users, and launch it.",
+        "Find order #1024 and send its invoice.",
     ]
 
     /// `brah://tour` from the benchmark page's "Watch Brah do it" button.
