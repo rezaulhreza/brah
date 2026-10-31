@@ -63,6 +63,25 @@ Fake app, fake bills, fake people. Real Brah.
 
 ## Screen actions
 
+### Claude (subscription or API key)
+
+Brah has its own hands: `screenshot`, `click`, `type`, `key` and `scroll`. Claude Code gets them
+through a small MCP server that Brah runs on `127.0.0.1`, with a new token on each run. The
+Anthropic API route uses the same tools in its own loop. Brah's yellow cursor flies to each
+click first, so you can see what happens.
+
+Brah acts in auto mode: it does the task, and asks first only before a risky action, such as
+send, pay, delete, publish, submit or sign in. Answer with **Allow**, **Always allow** or **Not
+now**, or say yes or no. Stop cancels the rest of the task.
+
+Clicks and typing need the Accessibility permission: System Settings > Privacy & Security >
+Accessibility > Brah.
+
+To try it, open `demo/benchmark.html` in a browser. It is a made-up app with charts, forms,
+multi-step flows and a scored list of tasks, from "read a value" to "finish a four-step wizard".
+
+### Hermes
+
 Brah keeps the agent's hands off your screen until you say yes.
 
 Hermes acts on the screen with its `computer_use` tool, which Hermes leaves off for the API
@@ -224,11 +243,8 @@ System Voice > Manage Voices.
 ## Roadmap
 
 1. **More providers.** The OpenAI API, the Codex subscription, and Ollama as its own choice.
-2. **Brah does the clicks.** Screen actions for every provider, not only Hermes. Brah runs the
-   computer-use loop itself: the model asks for a click or a key, Brah checks it, does it, and
-   sends back a new screenshot until the task is done. Auto mode acts and asks first only before
-   risky actions, with Allow, Always allow and Deny, by click or voice. The Anthropic API comes
-   first, on a model that supports computer use.
+2. **Clicks for every provider.** Claude does it now. Next: OpenAI-compatible servers, and
+   Always allow rules that last after Brah quits.
 3. **More voices.** Speech to text from Groq, OpenAI Whisper and local models. OpenAI Realtime
    for live talk.
 4. **Agents.** Workflows you set up yourself, for example an onboarding guide for your team.
