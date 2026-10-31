@@ -53,17 +53,42 @@ final class ProvidersTests: XCTestCase {
     func testAnthropicRequest() throws {
         var transcript = Transcript()
         transcript.add("What is this?", "A chart.")
-        let request = AnthropicConnection.request(question: "And this?", snapshot: snapshot, key: "k",
-                                                  choice: ModelChoice(model: "claude-haiku-5-5"), transcript: transcript,
-                                                  system: Brief.system(for: snapshot, hands: .none))
+        let messages = AnthropicConnection.messages(question: "And this?", snapshot: snapshot, transcript: transcript)
+        let request = AnthropicConnection.request(messages: messages, key: "k", choice: ModelChoice(model: "claude-haiku-5-5"),
+                                                  system: Brief.system(for: snapshot, hands: .none), tools: false)
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "k")
         let json = try body(request)
         XCTAssertEqual(json["model"] as? String, "claude-haiku-5-5")
         XCTAssertEqual((json["output_config"] as? [String: String])?["effort"], "medium")
-        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
-        XCTAssertEqual(messages.count, 3)
-        XCTAssertEqual(messages[0]["content"] as? String, "What is this?")
+        XCTAssertNil(json["tools"])
+        let sent = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(sent.count, 3)
+        XCTAssertEqual(sent[0]["content"] as? String, "What is this?")
         XCTAssertTrue((json["system"] as? String ?? "").contains("You cannot click"))
+
+        let withTools = try body(AnthropicConnection.request(messages: messages, key: "k", choice: ModelChoice(model: "m"),
+                                                             system: "S", tools: true))
+        XCTAssertEqual((withTools["tools"] as? [[String: Any]])?.count, ScreenTool.names.count)
+    }
+
+    func testClaudeTurnRebuildsToolUse() throws {
+        var turn = ClaudeTurn()
+        let events: [[String: Any]] = [
+            ["type": "content_block_start", "index": 0, "content_block": ["type": "thinking", "thinking": ""]],
+            ["type": "content_block_delta", "index": 0, "delta": ["type": "signature_delta", "signature": "sig"]],
+            ["type": "content_block_start", "index": 1, "content_block": ["type": "text", "text": ""]],
+            ["type": "content_block_delta", "index": 1, "delta": ["type": "text_delta", "text": "On it."]],
+            ["type": "content_block_start", "index": 2, "content_block": ["type": "tool_use", "id": "t1", "name": "click", "input": [String: Any]()]],
+            ["type": "content_block_delta", "index": 2, "delta": ["type": "input_json_delta", "partial_json": "{\"x\": 4,"]],
+            ["type": "content_block_delta", "index": 2, "delta": ["type": "input_json_delta", "partial_json": " \"y\": 5}"]],
+            ["type": "message_delta", "delta": ["stop_reason": "tool_use"]],
+        ]
+        let words = try events.compactMap { try turn.feed($0) }
+        XCTAssertEqual(words, ["On it."])
+        XCTAssertEqual(turn.stop, "tool_use")
+        XCTAssertEqual(turn.content[0]["signature"] as? String, "sig")
+        XCTAssertEqual((turn.content[2]["input"] as? [String: Int])?["y"], 5)
+        XCTAssertEqual(turn.toolUses.first?.name, "click")
     }
 
     func testOpenAIRequestSendsEffortOnlyWhenAsked() throws {
@@ -159,5 +184,58 @@ final class SpeechTests: XCTestCase {
 
         XCTAssertEqual(GroqSpeech.pieces("One. Two. Three.", limit: 9), ["One. Two.", "Three."])
         XCTAssertEqual(GroqSpeech.pieces(""), [])
+    }
+}
+
+final class ScreenToolTests: XCTestCase {
+    func testRisk() {
+        XCTAssertTrue(ScreenTool.isRisky(label: "Send invoice", flagged: false))
+        XCTAssertTrue(ScreenTool.isRisky(label: "Open tab", flagged: true))
+        XCTAssertFalse(ScreenTool.isRisky(label: "Open the Acquisition tab", flagged: false))
+        XCTAssertFalse(ScreenTool.isRisky(label: "Orders page", flagged: false))
+    }
+
+    func testKeyPress() {
+        XCTAssertEqual(Shortcut.keyPress("return")?.modifiers, 0)
+        XCTAssertEqual(Shortcut.keyPress("cmd+l")?.modifiers, Shortcut.command)
+        XCTAssertNil(Shortcut.keyPress("hyper+l"))
+        XCTAssertEqual(ScreenTool.specs.compactMap { $0["name"] as? String }, ScreenTool.names)
+    }
+}
+
+final class MCPTests: XCTestCase {
+    struct Echo: ScreenActing {
+        func run(_ name: String, input: Data) async -> ToolResult {
+            ToolResult(text: "\(name) \(String(decoding: input, as: UTF8.self))", jpeg: Data([1]))
+        }
+    }
+
+    private func call(_ object: [String: Any]) async throws -> [String: Any]? {
+        let body = try JSONSerialization.data(withJSONObject: object)
+        guard let data = await MCP.respond(to: body, actions: Echo()) else { return nil }
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    func testListAndCall() async throws {
+        let list = try await call(["jsonrpc": "2.0", "id": 1, "method": "tools/list"])
+        let tools = try XCTUnwrap((list?["result"] as? [String: Any])?["tools"] as? [[String: Any]])
+        XCTAssertEqual(tools.compactMap { $0["name"] as? String }, ScreenTool.names)
+        XCTAssertNotNil(tools[1]["inputSchema"])
+
+        let result = try await call(["jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                                     "params": ["name": "click", "arguments": ["x": 1]]])?["result"] as? [String: Any]
+        let content = try XCTUnwrap(result?["content"] as? [[String: Any]])
+        XCTAssertEqual(content[0]["text"] as? String, #"click {"x":1}"#)
+        XCTAssertEqual(content[1]["type"] as? String, "image")
+
+        let note = try await call(["jsonrpc": "2.0", "method": "notifications/initialized"])
+        XCTAssertNil(note)
+    }
+
+    func testClaudeCodeGetsTheTools() {
+        let tools = ToolServerAddress(url: URL(string: "http://127.0.0.1:5000/mcp")!, token: "t")
+        let args = ClaudeCodeConnection.arguments(choice: ModelChoice(model: "haiku"), system: "S", resume: nil, tools: tools)
+        XCTAssertEqual(args[args.firstIndex(of: "--allowedTools")! + 1], "mcp__brah__screenshot,mcp__brah__click,mcp__brah__type,mcp__brah__key,mcp__brah__scroll")
+        XCTAssertTrue(args[args.firstIndex(of: "--mcp-config")! + 1].contains(#""url":"http://127.0.0.1:5000/mcp""#))
     }
 }

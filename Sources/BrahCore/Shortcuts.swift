@@ -76,6 +76,18 @@ public struct Shortcut: Equatable, Sendable {
         return from(keyCode: key.code, modifiers: modifiers)
     }
 
+    /// A key for the agent to press, with or without modifiers: `return`, `cmd+l`, `shift+tab`.
+    public static func keyPress(_ text: String) -> (keyCode: Int, modifiers: Int)? {
+        let parts = text.lowercased().split(separator: "+").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let keyName = parts.last, let key = keys[keyName] else { return nil }
+        var modifiers = 0
+        for name in parts.dropLast() {
+            guard let modifier = modifierNames[name] else { return nil }
+            modifiers |= modifier.flag
+        }
+        return (key.code, modifiers)
+    }
+
     /// The shortcut for a key that a person pressed, for a key recorder. `modifiers` are the
     /// Carbon flags; other bits are ignored. Nil for a key that `parse` does not know, and for a
     /// key with no modifier, except a function key.

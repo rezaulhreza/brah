@@ -52,6 +52,9 @@ final class BubbleModel: ObservableObject {
     var onListen: () -> Void = {}
     var onClose: () -> Void = {}
     var onApprove: (Bool) -> Void = { _ in }
+    /// A risky screen action waits: "Always allow" lets the same action through from now on.
+    @Published var canAlwaysAllow = false
+    var onAlwaysAllow: () -> Void = {}
 
     var isBusy: Bool { [.listening, .transcribing, .thinking].contains(phase) }
 }
@@ -134,6 +137,9 @@ struct BubbleView: View {
             Text(text).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button("Allow") { model.onApprove(true) }.keyboardShortcut(.defaultAction)
+                if model.canAlwaysAllow {
+                    Button("Always allow") { model.onAlwaysAllow() }
+                }
                 Button("Not now") { model.onApprove(false) }
                 Spacer()
                 hint(model.handsFree ? "or say yes or no" : "")
@@ -317,6 +323,11 @@ final class Bubble {
 
     func hide() {
         panel.orderOut(nil)
+    }
+
+    /// While Brah clicks for the agent, clicks go through the bubble to the app under it.
+    func passThrough(_ on: Bool) {
+        panel.ignoresMouseEvents = on
     }
 
     func bringToFront() {

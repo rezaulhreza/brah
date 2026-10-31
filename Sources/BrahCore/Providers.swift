@@ -267,18 +267,79 @@ enum ClaudeEvent: Equatable {
     }
 }
 
+/// One streamed Claude message, rebuilt block by block for the next request of a tool loop.
+struct ClaudeTurn {
+    private var blocks: [Int: [String: Any]] = [:]
+    private var inputs: [Int: String] = [:]
+    private(set) var stop = ""
+
+    /// Takes one event. Returns the new words, if the event has any.
+    mutating func feed(_ json: [String: Any]) throws -> String? {
+        let index = json["index"] as? Int ?? 0
+        switch json["type"] as? String {
+        case "content_block_start":
+            blocks[index] = json["content_block"] as? [String: Any] ?? [:]
+        case "content_block_delta":
+            let delta = json["delta"] as? [String: Any] ?? [:]
+            switch delta["type"] as? String {
+            case "text_delta":
+                let text = delta["text"] as? String ?? ""
+                blocks[index, default: [:]]["text"] = (blocks[index]?["text"] as? String ?? "") + text
+                return text.isEmpty ? nil : text
+            case "thinking_delta":
+                blocks[index, default: [:]]["thinking"] = (blocks[index]?["thinking"] as? String ?? "") + (delta["thinking"] as? String ?? "")
+            case "signature_delta":
+                blocks[index, default: [:]]["signature"] = (blocks[index]?["signature"] as? String ?? "") + (delta["signature"] as? String ?? "")
+            case "input_json_delta":
+                inputs[index, default: ""] += delta["partial_json"] as? String ?? ""
+            default: break
+            }
+        default:
+            switch ClaudeEvent.parse(json) {
+            case .stop(let reason): stop = reason
+            case .error(let error): throw error
+            default: break
+            }
+        }
+        return nil
+    }
+
+    /// The blocks to send back as the assistant's turn, with each tool input as an object.
+    var content: [[String: Any]] {
+        blocks.keys.sorted().map { index in
+            var block = blocks[index]!
+            if block["type"] as? String == "tool_use" {
+                block["input"] = inputs[index].flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) } ?? [String: Any]()
+            }
+            return block
+        }
+    }
+
+    var toolUses: [(id: String, name: String, input: Data)] {
+        content.filter { $0["type"] as? String == "tool_use" }.map { block in
+            (block["id"] as? String ?? "", block["name"] as? String ?? "",
+             (try? JSONSerialization.data(withJSONObject: block["input"] ?? [String: Any]())) ?? Data("{}".utf8))
+        }
+    }
+}
+
 public actor AnthropicConnection: AgentConnection {
     public nonisolated let name = "Claude"
-    public nonisolated let canAct = false
+    public nonisolated let canAct: Bool
     private let key: String
+    private let actions: ScreenActing?
     private var choice: ModelChoice
     private let session: URLSession
     private var transcript = Transcript()
 
     private let responses: ResponseSettings
 
-    public init(key: String, choice: ModelChoice, responses: ResponseSettings = ResponseSettings(), session: URLSession = .shared) {
+    /// With `actions`, Claude can click and type through Brah's screen tools.
+    public init(key: String, choice: ModelChoice, responses: ResponseSettings = ResponseSettings(), actions: ScreenActing? = nil,
+                session: URLSession = .shared) {
         self.key = key
+        self.actions = actions
+        canAct = actions != nil
         self.responses = responses
         self.choice = choice
         self.session = session
@@ -288,36 +349,47 @@ public actor AnthropicConnection: AgentConnection {
     public func setEffort(_ effort: Effort) { choice.effort = effort }
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
-        let request = Self.request(question: question, snapshot: snapshot, key: key, choice: choice, transcript: transcript,
-                                   system: Brief.system(for: snapshot, hands: .none, responses: responses))
-        let (bytes, _) = try await HTTP.stream(request, session: session)
+        let system = Brief.system(for: snapshot, hands: canAct ? .tools : .none, responses: responses)
+        var messages = Self.messages(question: question, snapshot: snapshot, transcript: transcript)
         var text = ""
-        var stop = ""
-        for try await line in bytes.lines where line.hasPrefix("data:") {
-            guard let json = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any],
-                  let event = ClaudeEvent.parse(json) else { continue }
-            switch event {
-            case .text(let piece):
-                text += piece
-                onEvent(.text(piece))
-            case .stop(let reason): stop = reason
-            case .error(let error): throw error
+        // A tool loop: Claude asks for an action, Brah does it and sends back a new screenshot.
+        for _ in 0..<25 {
+            let request = Self.request(messages: messages, key: key, choice: choice, system: system, tools: canAct)
+            let (bytes, _) = try await HTTP.stream(request, session: session)
+            var turn = ClaudeTurn()
+            if !text.isEmpty, !text.hasSuffix("\n") {
+                text += "\n"
+                onEvent(.text("\n"))
             }
+            for try await line in bytes.lines where line.hasPrefix("data:") {
+                guard let json = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any] else { continue }
+                if let piece = try turn.feed(json) {
+                    text += piece
+                    onEvent(.text(piece))
+                }
+            }
+            guard turn.stop == "tool_use", let actions else {
+                if text.isEmpty { throw turn.stop == "refusal" ? ProviderError.refused : AgentError.emptyReply }
+                break
+            }
+            messages.append(["role": "assistant", "content": turn.content])
+            var results: [[String: Any]] = []
+            for use in turn.toolUses {
+                let result = await actions.run(use.name, input: use.input)
+                var content: [[String: Any]] = [["type": "text", "text": result.text]]
+                if let jpeg = result.jpeg {
+                    content.append(["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": jpeg.base64EncodedString()]])
+                }
+                results.append(["type": "tool_result", "tool_use_id": use.id, "content": content, "is_error": result.isError])
+            }
+            messages.append(["role": "user", "content": results])
+            try Task.checkCancellation()
         }
-        if text.isEmpty { throw stop == "refusal" ? ProviderError.refused : AgentError.emptyReply }
         transcript.add(question, text)
         return Reply.parse(text)
     }
 
-    static func request(question: String, snapshot: Snapshot, key: String, choice: ModelChoice, transcript: Transcript,
-                        system: String) -> URLRequest {
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 300
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
+    static func messages(question: String, snapshot: Snapshot, transcript: Transcript) -> [[String: Any]] {
         var messages: [[String: Any]] = transcript.turns.flatMap { turn in
             [["role": "user", "content": turn.question], ["role": "assistant", "content": turn.answer]]
         }
@@ -325,7 +397,17 @@ public actor AnthropicConnection: AgentConnection {
             ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": snapshot.jpeg.base64EncodedString()]],
             ["type": "text", "text": question],
         ]])
-        let body: [String: Any] = [
+        return messages
+    }
+
+    static func request(messages: [[String: Any]], key: String, choice: ModelChoice, system: String, tools: Bool) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue(key, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        var body: [String: Any] = [
             "model": choice.model,
             "max_tokens": 16000,
             "stream": true,
@@ -333,6 +415,7 @@ public actor AnthropicConnection: AgentConnection {
             "output_config": ["effort": choice.effort.rawValue],
             "messages": messages,
         ]
+        if tools { body["tools"] = ScreenTool.specs }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
     }

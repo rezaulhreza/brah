@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import BrahCore
 import Carbon.HIToolbox
 import Speech
@@ -12,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var bubble = Bubble(onEscape: { [weak self] in self?.escape() })
     let cursor = BrahCursor()
     let marks = ScreenMarks()
+    private let actions = ScreenActions()
+    private var toolServer: ToolServer?
+    private var tools: ToolServerAddress?
+    /// A risky screen action waits here for the user's answer.
+    private var pendingAction: CheckedContinuation<ScreenActions.Approval, Never>?
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -86,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runDemo(index + 1 < CommandLine.arguments.count ? CommandLine.arguments[index + 1] : "")
             return
         }
+        startTools()
         loadAgent()
         settingsWindow.onSave = { [weak self] in self?.reloadSettings() }
         settingsWindow.onOpen = { [weak self] open in
@@ -111,7 +118,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.beginConversation(keepBubble: true)
             }
         }
-        model.onApprove = { [weak self] yes in yes ? self?.approve() : self?.deny() }
+        model.onApprove = { [weak self] yes in
+            guard let self, !self.answerAction(yes ? .allow : .deny) else { return }
+            yes ? self.approve() : self.deny()
+        }
+        model.onAlwaysAllow = { [weak self] in self?.answerAction(.always) }
         model.onDoIt = { [weak self] in self?.doItForMe() }
 
         loadShortcuts()
@@ -156,10 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .hermes:
             agent = HermesSettings.load().map { HermesConnection(settings: $0, responses: responses) }
         case .claude:
-            agent = ClaudeCodeConnection(choice: providers.claude, responses: responses)
+            agent = ClaudeCodeConnection(choice: providers.claude, responses: responses, tools: tools)
         case .anthropic:
             agent = (environment["ANTHROPIC_API_KEY"] ?? Secrets.get(Secrets.anthropicKey))
-                .map { AnthropicConnection(key: $0, choice: providers.anthropic, responses: responses) }
+                .map { AnthropicConnection(key: $0, choice: providers.anthropic, responses: responses, actions: actions) }
         case .custom:
             agent = URL(string: providers.customURL).flatMap { $0.scheme == nil ? nil : $0 }.map {
                 OpenAICompatibleConnection(baseURL: $0, key: Secrets.get(Secrets.customKey), choice: providers.custom,
@@ -170,6 +181,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble.model.agentName = agent?.name ?? providers.active.title
         bubble.model.canAct = agentIsLocal
         log("agent: \(providers.active.title)\(agent == nil ? " (not set up)" : "")\(agentIsLocal ? "" : ", no screen actions")")
+    }
+
+    private func startTools() {
+        actions.confirm = { [weak self] label in await self?.confirmAction(label) ?? .deny }
+        actions.onStep = { [weak self] label in
+            self?.bubble.model.step = label
+            self?.bubble.model.acting = true
+            self?.log("action: \(label)")
+        }
+        actions.pointAt = { [weak self] spot, snapshot in
+            self?.cursor.mood = nil
+            self?.cursor.show(at: snapshot.viewPoint(spot), label: spot.label, on: snapshot.screenFrame)
+        }
+        actions.passThrough = { [weak self] on in self?.bubble.passThrough(on) }
+        toolServer = try? ToolServer(actions: actions)
+        tools = toolServer?.start()
+        log("screen tools: \(tools?.url.absoluteString ?? "none"), accessibility \(AXIsProcessTrusted() ? "allowed" : "NOT allowed")")
+    }
+
+    private func confirmAction(_ label: String) async -> ScreenActions.Approval {
+        answerAction(.deny)
+        let action = label.prefix(1).lowercased() + label.dropFirst()
+        bubble.model.phase = .approval("Can I \(action)?")
+        bubble.model.canAlwaysAllow = true
+        if speaks { voice.say("Can I \(action)?") }
+        let answer = await withCheckedContinuation { pendingAction = $0 }
+        bubble.model.canAlwaysAllow = false
+        if work != nil { bubble.model.phase = .thinking }
+        log("action \(answer == .deny ? "refused" : "allowed"): \(label)")
+        return answer
+    }
+
+    @discardableResult
+    private func answerAction(_ answer: ScreenActions.Approval) -> Bool {
+        guard let pending = pendingAction else { return false }
+        pendingAction = nil
+        pending.resume(returning: answer)
+        return true
     }
 
     private func setEffort(_ effort: Effort) {
@@ -305,7 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
                 bubble.model.question = words
-                if awaitingApproval {
+                if awaitingApproval || pendingAction != nil {
                     answered(words)
                 } else {
                     submit(words)
@@ -346,6 +395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await lockScreen(!approved)
             do {
                 let snapshot = try await capture.value
+                actions.begin(with: snapshot)
                 log("asking\(approved ? " (approved)" : ""): \(question.debugDescription)")
                 let reply = try await agent.ask(question, snapshot: snapshot) { [weak self] event in
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.arrived(event, for: id) } }
@@ -527,6 +577,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Words said while Brah waits for a yes. A plain yes or no decides at once. Other words go to
     /// the agent with the screen open for that one request, and the agent decides from the words.
     private func answered(_ words: String) {
+        if pendingAction != nil {
+            answerAction(Phrases.approval(words) == true ? .allow : .deny)
+            return
+        }
         if let yes = Phrases.approval(words) {
             yes ? approve() : deny()
             return
@@ -558,6 +612,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// it stopped. A hands-free conversation goes on listening.
     func stop() {
         marks.hide()
+        answerAction(.deny)
+        actions.cancel()
         if pressedAt != nil {
             pressedAt = nil
             _ = recorder.stop()
@@ -727,7 +783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 endConversation(sayBye: true)
                 return
             }
-            if awaitingApproval {
+            if awaitingApproval || pendingAction != nil {
                 bubble.model.question = words
                 answered(words)
                 return

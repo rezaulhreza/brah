@@ -4,15 +4,19 @@ import Foundation
 /// answers. Each question resumes the session of the last one.
 public actor ClaudeCodeConnection: AgentConnection {
     public nonisolated let name = "Claude"
-    public nonisolated let canAct = false
+    public nonisolated let canAct: Bool
     private var choice: ModelChoice
+    private let tools: ToolServerAddress?
     private var sessionID: String?
 
     private let responses: ResponseSettings
 
-    public init(choice: ModelChoice, responses: ResponseSettings = ResponseSettings()) {
+    /// With `tools`, Claude Code can click and type through Brah's MCP server.
+    public init(choice: ModelChoice, responses: ResponseSettings = ResponseSettings(), tools: ToolServerAddress? = nil) {
         self.choice = choice
         self.responses = responses
+        self.tools = tools
+        canAct = tools != nil
     }
 
     public func reset() { sessionID = nil }
@@ -27,10 +31,11 @@ public actor ClaudeCodeConnection: AgentConnection {
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
-    static func arguments(choice: ModelChoice, system: String, resume: String?) -> [String] {
+    static func arguments(choice: ModelChoice, system: String, resume: String?, tools: ToolServerAddress? = nil) -> [String] {
         ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--verbose",
          "--model", choice.model, "--effort", choice.effort.rawValue, "--tools", "", "--strict-mcp-config",
          "--setting-sources", "", "--disable-slash-commands", "--system-prompt", system]
+            + (tools.map { ["--mcp-config", $0.mcpConfig, "--allowedTools", ToolServerAddress.allowedTools] } ?? [])
             + (resume.map { ["--resume", $0] } ?? [])
     }
 
@@ -52,7 +57,8 @@ public actor ClaudeCodeConnection: AgentConnection {
 
         let process = Process()
         process.executableURL = claude
-        process.arguments = Self.arguments(choice: choice, system: Brief.system(for: snapshot, hands: .none, responses: responses), resume: sessionID)
+        process.arguments = Self.arguments(choice: choice, system: Brief.system(for: snapshot, hands: canAct ? .tools : .none, responses: responses),
+                                           resume: sessionID, tools: tools)
         process.currentDirectoryURL = folder
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin
@@ -70,6 +76,11 @@ public actor ClaudeCodeConnection: AgentConnection {
                 if let id = json["session_id"] as? String { sessionID = id }
                 switch json["type"] as? String {
                 case "stream_event":
+                    // A new message after a tool call: keep its words apart from the ones before.
+                    if (json["event"] as? [String: Any])?["type"] as? String == "message_start", !text.isEmpty, !text.hasSuffix("\n") {
+                        text += "\n"
+                        onEvent(.text("\n"))
+                    }
                     switch (json["event"] as? [String: Any]).flatMap(ClaudeEvent.parse) {
                     case .text(let piece):
                         text += piece
