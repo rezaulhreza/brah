@@ -14,8 +14,8 @@ Not before.
 
 That face is the icon: a cursor giving you the side-eye.
 
-Brah sees, listens, talks and points. Your agent does the thinking and the clicking. Hermes is
-the first agent. Claude and OpenClaw are next in the queue.
+Brah sees, listens, talks and points. Your AI does the thinking. Pick Hermes, Claude with your
+own plan or an API key, or any OpenAI-compatible server, Ollama included.
 
 ![Brah answers out loud and points at the Export button](docs/screenshots/answer.png)
 
@@ -47,6 +47,8 @@ Fake app, fake bills, fake people. Real Brah.
 - **Points, with its own cursor.** A yellow Brah cursor flies from your pointer to the exact spot,
   leaves a short trail so you can follow it, and pulses there with a label. No more "top right.
   No, the other top right."
+- **Marks the screen.** It circles, boxes, underlines, draws arrows and free-hand lines, the way
+  a mate would on a whiteboard. The marks draw in one by one and go away on the next question.
 - **Shows you, step by step.** Ask how to do something. Brah's cursor goes to the first click and
   waits. You click there, Brah looks again and goes to the next one, until the job is done. Clicks
   somewhere else do not count, so you can carry on with other things. Bored of
@@ -123,6 +125,27 @@ Modifiers: `ctrl`, `option` (or `alt`), `shift`, `cmd`. Keys: letters, digits, `
 function key. A shortcut that is not valid, or that two actions share, goes back to its default,
 and Brah says why in its log. The menu shows the shortcuts in use.
 
+## Pick your AI
+
+Open **Settings** from the Brah menu (or press ⌘,). The AI tab picks the provider:
+
+| Provider | What you need |
+|---|---|
+| Claude subscription | Claude Code installed and signed in. Brah runs it with its tools off. |
+| Anthropic API | An API key from console.anthropic.com. |
+| OpenAI-compatible | A server address such as `http://localhost:11434/v1` (Ollama), and a key if it needs one. |
+| Hermes | See below. The only one that can click for you today. |
+
+Both Claude routes start on Haiku 5.5 at medium effort. Change the model and the effort in
+Settings, or the effort from the menu in the middle of a conversation. **Check** tests the key
+and loads the model list. Keys go in the Keychain.
+
+Under Responses, pick short, normal or detailed answers, and write custom instructions that
+every provider gets ("Call me Rez. Use British English.").
+
+`BRAH_PROVIDER=claude|anthropic|custom|hermes` picks a provider for one run, without a change to
+the config file.
+
 ## Connect Hermes
 
 Brah calls the Hermes API server (`/v1/chat/completions`) and streams the answer. Hermes can
@@ -150,7 +173,17 @@ dashboard. Brah keeps both in the Keychain. The environment can set
 
 ## Voice
 
-Brah talks with your agent's voice, not a robot's.
+Brah talks with a voice you pick, not a robot's. The Voice tab in Settings sets who speaks:
+
+- **Deepgram Aura:** pick a voice (Athena, Pandora, Draco and more). Use your own Deepgram key,
+  or leave it empty to use the Deepgram plugin of your Hermes. It speaks while the answer
+  arrives. With your own key, Brah also listens with Deepgram.
+- **Groq Orpheus:** pick a voice (Autumn, Diana, Hannah, Austin, Daniel, Troy) and add your Groq
+  key. It speaks a sentence at a time.
+- **Mac:** free, private, and works offline. Pick any installed voice and press Play.
+- **Hermes voice, else Mac:** the default, described below.
+
+The Mac voice is also the fallback when another voice cannot speak.
 
 **With the `deepgram-live` Hermes plugin**, Brah uses your live voice: the Aura voice, the Flux
 listening model, the speed and the key terms that you set under `deepgram_live` in the Hermes
@@ -188,10 +221,20 @@ installed voice for your language. The default macOS voices sound robotic. For a
 download a Premium or Enhanced voice in System Settings > Accessibility > Spoken Content >
 System Voice > Manage Voices.
 
-## Next up
+## Roadmap
 
-1. **More agents.** Claude and OpenClaw, with the same see, talk and point contract.
-2. **App Store build.** Sandboxed: Brah keeps to seeing and pointing, and the agent acts.
+1. **More providers.** The OpenAI API, the Codex subscription, and Ollama as its own choice.
+2. **Brah does the clicks.** Screen actions for every provider, not only Hermes. Auto mode acts
+   and asks first only before risky actions, with Allow, Always allow and Deny, by click or voice.
+3. **More voices.** Speech to text from Groq, OpenAI Whisper and local models. OpenAI Realtime
+   for live talk.
+4. **Agents.** Workflows you set up yourself, for example an onboarding guide for your team.
+   Talk answers you; agents do things for you, in any app you can see.
+5. **Your AI from anywhere.** Reach an agent on another computer without a tunnel to set up.
+6. **History.** See past conversations and carry on with one.
+7. **Setup help.** Brah finds what is missing, such as Claude Code or a local model, and helps
+   you install it.
+8. **App Store build.** Sandboxed: Brah keeps to seeing and pointing, and the agent acts.
 
 ## Icons
 
