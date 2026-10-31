@@ -1064,7 +1064,7 @@ extension AppDelegate {
         "Switch the date range to Last 90 days.",
         "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
         "Create a campaign named Winter Push for Trial users, and launch it.",
-        "Find order #1024 and send its invoice.",
+        "Find order #1024 and send its invoice. I already said yes, so finish it.",
     ]
 
     /// `brah://tour` and `brah://stop` from the benchmark page's tour button.
@@ -1110,7 +1110,8 @@ extension AppDelegate {
         log("tour: start")
         tourFinished = false
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        let corner = screen.map { CGPoint(x: $0.visibleFrame.maxX - 380, y: $0.visibleFrame.minY + 260) } ?? NSEvent.mouseLocation
+        // Bottom left, over the page's sidebar, away from the buttons the tour clicks.
+        let corner = screen.map { CGPoint(x: $0.visibleFrame.minX + 2, y: $0.visibleFrame.minY + 260) } ?? NSEvent.mouseLocation
         for (index, question) in Self.tour.enumerated() {
             guard touring else { return }
             tourStep = index + 1

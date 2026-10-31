@@ -75,6 +75,8 @@ final class ScreenActions: ScreenActing, @unchecked Sendable {
             try? await Task.sleep(for: .milliseconds(450))
             guard started == generation else { return ToolResult(text: "The user stopped Brah.", isError: true) }
             passThrough(true)
+            // The window server takes a moment to let clicks through the bubble.
+            try? await Task.sleep(for: .milliseconds(150))
             Self.click(at: Self.global(x, y, on: snapshot), right: request.right, double: request.double)
             try? await Task.sleep(for: .milliseconds(80))
             passThrough(false)
