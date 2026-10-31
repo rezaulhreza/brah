@@ -74,8 +74,12 @@ public struct ProviderSettings: Equatable, Sendable {
                   customSendsEffort: custom?["sendEffort"] as? Bool ?? false)
     }
 
-    public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> ProviderSettings {
-        ProviderSettings(json: Config.json(home: home) ?? [:])
+    /// `BRAH_PROVIDER` picks the provider for one run, without a change to the config file.
+    public static func load(environment: [String: String] = ProcessInfo.processInfo.environment,
+                            home: URL = FileManager.default.homeDirectoryForCurrentUser) -> ProviderSettings {
+        var settings = ProviderSettings(json: Config.json(home: home) ?? [:])
+        if let kind = environment["BRAH_PROVIDER"].flatMap(ProviderKind.init(rawValue:)) { settings.active = kind }
+        return settings
     }
 
     public func applied(to json: [String: Any]) -> [String: Any] {
@@ -267,7 +271,7 @@ public actor AnthropicConnection: AgentConnection {
     public nonisolated let name = "Claude"
     public nonisolated let canAct = false
     private let key: String
-    private let choice: ModelChoice
+    private var choice: ModelChoice
     private let session: URLSession
     private var transcript = Transcript()
 
@@ -278,6 +282,7 @@ public actor AnthropicConnection: AgentConnection {
     }
 
     public func reset() { transcript.clear() }
+    public func setEffort(_ effort: Effort) { choice.effort = effort }
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, key: key, choice: choice, transcript: transcript)
@@ -342,7 +347,7 @@ public actor OpenAICompatibleConnection: AgentConnection {
     public nonisolated let canAct = false
     private let baseURL: URL
     private let key: String?
-    private let choice: ModelChoice
+    private var choice: ModelChoice
     private let sendsEffort: Bool
     private let session: URLSession
     private var transcript = Transcript()
@@ -357,6 +362,7 @@ public actor OpenAICompatibleConnection: AgentConnection {
     }
 
     public func reset() { transcript.clear() }
+    public func setEffort(_ effort: Effort) { choice.effort = effort }
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, baseURL: baseURL, key: key, choice: choice,

@@ -18,6 +18,12 @@ public protocol AgentConnection: Sendable {
     func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply
     /// Forget the conversation, so the next question starts a new one.
     func reset() async
+    /// Applies from the next question, in the same conversation.
+    func setEffort(_ effort: Effort) async
+}
+
+extension AgentConnection {
+    public func setEffort(_ effort: Effort) async {}
 }
 
 public enum Brief {

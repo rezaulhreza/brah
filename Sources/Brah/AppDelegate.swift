@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var speakItem: NSMenuItem?
     private var voiceItem: NSMenuItem?
     private var handsFreeItem: NSMenuItem?
+    private var effortItems: [NSMenuItem] = []
 
     private var speaks: Bool {
         get { UserDefaults.standard.object(forKey: "speak") as? Bool ?? true }
@@ -143,11 +144,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func loadAgent() {
-        let settings = HermesSettings.load()
-        agent = settings.map { HermesConnection(settings: $0) }
-        agentIsLocal = settings?.isLocal ?? true
-        bubble.model.agentName = agent?.name ?? "Hermes"
-        log("agent: \(agent?.name ?? "none")\(agentIsLocal ? "" : " on a server (no screen actions)")")
+        let providers = ProviderSettings.load()
+        let environment = ProcessInfo.processInfo.environment
+        switch providers.active {
+        case .hermes:
+            agent = HermesSettings.load().map { HermesConnection(settings: $0) }
+        case .claude:
+            agent = ClaudeCodeConnection(choice: providers.claude)
+        case .anthropic:
+            agent = (environment["ANTHROPIC_API_KEY"] ?? Secrets.get(Secrets.anthropicKey))
+                .map { AnthropicConnection(key: $0, choice: providers.anthropic) }
+        case .custom:
+            agent = URL(string: providers.customURL).flatMap { $0.scheme == nil ? nil : $0 }.map {
+                OpenAICompatibleConnection(baseURL: $0, key: Secrets.get(Secrets.customKey), choice: providers.custom,
+                                           sendsEffort: providers.customSendsEffort)
+            }
+        }
+        agentIsLocal = agent?.canAct ?? false
+        bubble.model.agentName = agent?.name ?? providers.active.title
+        bubble.model.canAct = agentIsLocal
+        log("agent: \(providers.active.title)\(agent == nil ? " (not set up)" : "")\(agentIsLocal ? "" : ", no screen actions")")
+    }
+
+    private func setEffort(_ effort: Effort) {
+        guard var json = try? ConfigFile.read() else { return }
+        var providers = ProviderSettings(json: json)
+        providers.effort = effort
+        json = providers.applied(to: json)
+        try? ConfigFile.write(json)
+        Task { await agent?.setEffort(effort) }
+        effortItems.forEach { $0.state = $0.representedObject as? String == effort.rawValue ? .on : .off }
+        log("effort: \(effort.rawValue)")
+    }
+
+    @objc private func pickEffort(_ sender: NSMenuItem) {
+        (sender.representedObject as? String).flatMap(Effort.init(rawValue:)).map(setEffort)
     }
 
     private func loadShortcuts() {
@@ -285,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, let capture else { return }
         guard let agent else {
-            bubble.model.phase = .failed("No Hermes key found. Set BRAH_HERMES_KEY, or write ~/.config/brah/config.json.")
+            bubble.model.phase = .failed("\(ProviderSettings.load().active.title) is not set up. Open Settings from the Brah menu.")
             return
         }
 
@@ -799,9 +830,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         speakItem = speak
         menu.addItem(entry("New conversation", shortcut: nil, action: #selector(newConversation)))
         menu.addItem(.separator())
-        let agentLine = NSMenuItem(title: agent == nil ? "Hermes: no key found" : "Connected to Hermes", action: nil, keyEquivalent: "")
+        let providers = ProviderSettings.load()
+        let agentLine = NSMenuItem(title: "\(providers.active.title)\(agent == nil ? ": not set up" : "")", action: nil, keyEquivalent: "")
         agentLine.isEnabled = false
         menu.addItem(agentLine)
+        if let current = providers.effort {
+            let effort = NSMenuItem(title: "Effort", action: nil, keyEquivalent: "")
+            let levels = NSMenu()
+            effortItems = Effort.allCases.map { level in
+                let item = NSMenuItem(title: level.rawValue.capitalized, action: #selector(pickEffort), keyEquivalent: "")
+                item.target = self
+                item.representedObject = level.rawValue
+                item.state = level == current ? .on : .off
+                levels.addItem(item)
+                return item
+            }
+            effort.submenu = levels
+            menu.addItem(effort)
+        }
         let voiceLine = NSMenuItem(title: "Voice: \(voice.route)", action: nil, keyEquivalent: "")
         voiceLine.isEnabled = false
         menu.addItem(voiceLine)

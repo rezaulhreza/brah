@@ -11,6 +11,8 @@ public enum Secrets {
     /// The Cloudflare Access service token, for a Hermes behind Cloudflare Access.
     public static let accessClientID = "cf-access.client-id"
     public static let accessClientSecret = "cf-access.client-secret"
+    public static let anthropicKey = "anthropic.key"
+    public static let customKey = "custom.key"
 
     public struct Failure: Error, CustomStringConvertible {
         public var status: OSStatus

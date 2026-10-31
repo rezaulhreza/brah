@@ -5,7 +5,7 @@ import Foundation
 public actor ClaudeCodeConnection: AgentConnection {
     public nonisolated let name = "Claude"
     public nonisolated let canAct = false
-    private let choice: ModelChoice
+    private var choice: ModelChoice
     private var sessionID: String?
 
     public init(choice: ModelChoice) {
@@ -13,6 +13,7 @@ public actor ClaudeCodeConnection: AgentConnection {
     }
 
     public func reset() { sessionID = nil }
+    public func setEffort(_ effort: Effort) { choice.effort = effort }
 
     public static func executable(environment: [String: String] = ProcessInfo.processInfo.environment,
                                   home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL? {

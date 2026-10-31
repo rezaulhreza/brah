@@ -43,6 +43,8 @@ final class BubbleModel: ObservableObject {
         }
     }
     var agentName = "Hermes"
+    /// The agent can click for the user, so a guide offers "Do it for me".
+    @Published var canAct = true
     var onSubmit: (String) -> Void = { _ in }
     var onStop: () -> Void = {}
     var onMute: () -> Void = {}
@@ -121,7 +123,9 @@ struct BubbleView: View {
                 HStack(spacing: 8) {
                     hint("Step \(number): click where Brah points")
                     Spacer()
-                    Button("Do it for me", action: model.onDoIt).controlSize(.small)
+                    if model.canAct {
+                        Button("Do it for me", action: model.onDoIt).controlSize(.small)
+                    }
                 }
             } else if let step = model.step {
                 hint(step)
