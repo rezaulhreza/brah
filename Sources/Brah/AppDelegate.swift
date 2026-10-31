@@ -151,18 +151,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func loadAgent() {
         let providers = ProviderSettings.load()
         let environment = ProcessInfo.processInfo.environment
+        let responses = ResponseSettings.load()
         switch providers.active {
         case .hermes:
-            agent = HermesSettings.load().map { HermesConnection(settings: $0) }
+            agent = HermesSettings.load().map { HermesConnection(settings: $0, responses: responses) }
         case .claude:
-            agent = ClaudeCodeConnection(choice: providers.claude)
+            agent = ClaudeCodeConnection(choice: providers.claude, responses: responses)
         case .anthropic:
             agent = (environment["ANTHROPIC_API_KEY"] ?? Secrets.get(Secrets.anthropicKey))
-                .map { AnthropicConnection(key: $0, choice: providers.anthropic) }
+                .map { AnthropicConnection(key: $0, choice: providers.anthropic, responses: responses) }
         case .custom:
             agent = URL(string: providers.customURL).flatMap { $0.scheme == nil ? nil : $0 }.map {
                 OpenAICompatibleConnection(baseURL: $0, key: Secrets.get(Secrets.customKey), choice: providers.custom,
-                                           sendsEffort: providers.customSendsEffort)
+                                           sendsEffort: providers.customSendsEffort, responses: responses)
             }
         }
         agentIsLocal = agent?.canAct ?? false

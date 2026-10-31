@@ -281,22 +281,24 @@ final class Voice {
     private func sayWithMac(_ text: String) {
         echo.spoke(text)
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = Self.bestMacVoice
+        utterance.voice = AVSpeechSynthesisVoice(identifier: SpeechSettings.load()) ?? Self.bestMacVoice
         system.speak(utterance)
     }
 
     /// The most natural installed voice for the user's language: Premium, then Enhanced. More
     /// can be added in System Settings > Accessibility > Spoken Content > System Voice.
-    static let bestMacVoice: AVSpeechSynthesisVoice? = {
+    static let bestMacVoice: AVSpeechSynthesisVoice? = macVoices.first ?? AVSpeechSynthesisVoice(language: AVSpeechSynthesisVoice.currentLanguageCode())
+
+    /// The installed voices for the user's language, best first.
+    static var macVoices: [AVSpeechSynthesisVoice] {
         let language = AVSpeechSynthesisVoice.currentLanguageCode()
         let prefix = String(language.prefix(2))
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
-        let ranked = voices.sorted { lhs, rhs in
+        return AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }.sorted { lhs, rhs in
             if lhs.quality != rhs.quality { return lhs.quality.rawValue > rhs.quality.rawValue }
-            return (lhs.language == language ? 1 : 0) > (rhs.language == language ? 1 : 0)
+            if (lhs.language == language) != (rhs.language == language) { return lhs.language == language }
+            return lhs.name < rhs.name
         }
-        return ranked.first ?? AVSpeechSynthesisVoice(language: language)
-    }()
+    }
 
     /// Silence now. A live reply is told to stop, so the server stops making sound.
     func stop() {

@@ -275,8 +275,11 @@ public actor AnthropicConnection: AgentConnection {
     private let session: URLSession
     private var transcript = Transcript()
 
-    public init(key: String, choice: ModelChoice, session: URLSession = .shared) {
+    private let responses: ResponseSettings
+
+    public init(key: String, choice: ModelChoice, responses: ResponseSettings = ResponseSettings(), session: URLSession = .shared) {
         self.key = key
+        self.responses = responses
         self.choice = choice
         self.session = session
     }
@@ -285,7 +288,8 @@ public actor AnthropicConnection: AgentConnection {
     public func setEffort(_ effort: Effort) { choice.effort = effort }
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
-        let request = Self.request(question: question, snapshot: snapshot, key: key, choice: choice, transcript: transcript)
+        let request = Self.request(question: question, snapshot: snapshot, key: key, choice: choice, transcript: transcript,
+                                   system: Brief.system(for: snapshot, hands: .none, responses: responses))
         let (bytes, _) = try await HTTP.stream(request, session: session)
         var text = ""
         var stop = ""
@@ -305,7 +309,8 @@ public actor AnthropicConnection: AgentConnection {
         return Reply.parse(text)
     }
 
-    static func request(question: String, snapshot: Snapshot, key: String, choice: ModelChoice, transcript: Transcript) -> URLRequest {
+    static func request(question: String, snapshot: Snapshot, key: String, choice: ModelChoice, transcript: Transcript,
+                        system: String) -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 300
@@ -324,7 +329,7 @@ public actor AnthropicConnection: AgentConnection {
             "model": choice.model,
             "max_tokens": 16000,
             "stream": true,
-            "system": Brief.system(for: snapshot, hands: .none),
+            "system": system,
             "output_config": ["effort": choice.effort.rawValue],
             "messages": messages,
         ]
@@ -352,8 +357,12 @@ public actor OpenAICompatibleConnection: AgentConnection {
     private let session: URLSession
     private var transcript = Transcript()
 
-    public init(baseURL: URL, key: String?, choice: ModelChoice, sendsEffort: Bool, session: URLSession = .shared) {
+    private let responses: ResponseSettings
+
+    public init(baseURL: URL, key: String?, choice: ModelChoice, sendsEffort: Bool, responses: ResponseSettings = ResponseSettings(),
+                session: URLSession = .shared) {
         self.baseURL = baseURL
+        self.responses = responses
         self.key = key
         self.choice = choice
         self.sendsEffort = sendsEffort
@@ -366,7 +375,8 @@ public actor OpenAICompatibleConnection: AgentConnection {
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, baseURL: baseURL, key: key, choice: choice,
-                                   sendsEffort: sendsEffort, transcript: transcript)
+                                   sendsEffort: sendsEffort, transcript: transcript,
+                                   system: Brief.system(for: snapshot, hands: .none, responses: responses))
         let (bytes, _) = try await HTTP.stream(request, session: session)
         var text = ""
         for try await line in bytes.lines {
@@ -381,14 +391,14 @@ public actor OpenAICompatibleConnection: AgentConnection {
     }
 
     static func request(question: String, snapshot: Snapshot, baseURL: URL, key: String?, choice: ModelChoice,
-                        sendsEffort: Bool, transcript: Transcript) -> URLRequest {
+                        sendsEffort: Bool, transcript: Transcript, system: String) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
         request.httpMethod = "POST"
         request.timeoutInterval = 300
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let key, !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
 
-        var messages: [[String: Any]] = [["role": "system", "content": Brief.system(for: snapshot, hands: .none)]]
+        var messages: [[String: Any]] = [["role": "system", "content": system]]
         for turn in transcript.turns {
             messages.append(["role": "user", "content": turn.question])
             messages.append(["role": "assistant", "content": turn.answer])

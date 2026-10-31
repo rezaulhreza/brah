@@ -158,3 +158,67 @@ public struct EditableSettings: Equatable, Sendable {
         if text.isEmpty { object.removeValue(forKey: key) } else { object[key] = text }
     }
 }
+
+/// How the agent answers: `{"responses": {"style": "short", "instructions": "Call me Rez."}}`.
+public struct ResponseSettings: Equatable, Sendable {
+    public enum Style: String, CaseIterable, Sendable {
+        case short, normal, detailed
+
+        var instruction: String {
+            switch self {
+            case .short: "Answer in at most three short sentences."
+            case .normal: "Answer in a short paragraph of at most six sentences."
+            case .detailed: "Answer as fully as the question needs, in short sentences."
+            }
+        }
+    }
+
+    public var style: Style
+    public var instructions: String
+
+    public init(style: Style = .short, instructions: String = "") {
+        self.style = style
+        self.instructions = instructions
+    }
+
+    public init(json: [String: Any]) {
+        let section = json["responses"] as? [String: Any]
+        self.init(style: (section?["style"] as? String).flatMap(Style.init(rawValue:)) ?? .short,
+                  instructions: section?["instructions"] as? String ?? "")
+    }
+
+    public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> ResponseSettings {
+        ResponseSettings(json: Config.json(home: home) ?? [:])
+    }
+
+    public func applied(to json: [String: Any]) -> [String: Any] {
+        var json = json
+        json["responses"] = ["style": style.rawValue, "instructions": instructions.trimmingCharacters(in: .whitespacesAndNewlines)]
+        return json
+    }
+
+    /// The user's own instructions, for the end of the brief.
+    var custom: String {
+        let text = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? "" : "\n\nThe user's own instructions for every answer:\n\(text.prefix(2000))"
+    }
+}
+
+/// `{"speech": {"macVoice": "com.apple.voice.premium.en-GB.Malcolm"}}`. Empty: the best installed voice.
+public enum SpeechSettings {
+    public static func macVoice(json: [String: Any]?) -> String {
+        (json?["speech"] as? [String: Any])?["macVoice"] as? String ?? ""
+    }
+
+    public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
+        macVoice(json: Config.json(home: home))
+    }
+
+    public static func applied(_ identifier: String, to json: [String: Any]) -> [String: Any] {
+        var json = json
+        var section = json["speech"] as? [String: Any] ?? [:]
+        section["macVoice"] = identifier
+        json["speech"] = section
+        return json
+    }
+}

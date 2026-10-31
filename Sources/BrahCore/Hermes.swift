@@ -70,8 +70,11 @@ public actor HermesConnection: AgentConnection {
     private let session: URLSession
     private var sessionID: String?
 
-    public init(settings: HermesSettings, session: URLSession = .shared) {
+    private let responses: ResponseSettings
+
+    public init(settings: HermesSettings, responses: ResponseSettings = ResponseSettings(), session: URLSession = .shared) {
         self.settings = settings
+        self.responses = responses
         self.session = session
     }
 
@@ -80,7 +83,8 @@ public actor HermesConnection: AgentConnection {
     }
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
-        let request = Self.request(question: question, snapshot: snapshot, settings: settings, sessionID: sessionID)
+        let request = Self.request(question: question, snapshot: snapshot, settings: settings, sessionID: sessionID,
+                                   responses: responses)
         let (bytes, http) = try await HTTP.stream(request, session: session)
         if let id = http?.value(forHTTPHeaderField: "X-Hermes-Session-Id"), !id.isEmpty {
             sessionID = id
@@ -104,7 +108,8 @@ public actor HermesConnection: AgentConnection {
         return Reply.parse(text)
     }
 
-    static func request(question: String, snapshot: Snapshot, settings: HermesSettings, sessionID: String?) -> URLRequest {
+    static func request(question: String, snapshot: Snapshot, settings: HermesSettings, sessionID: String?,
+                        responses: ResponseSettings = ResponseSettings()) -> URLRequest {
         var request = URLRequest(url: settings.url.appendingPathComponent("v1/chat/completions"))
         request.httpMethod = "POST"
         request.timeoutInterval = 300
@@ -120,7 +125,7 @@ public actor HermesConnection: AgentConnection {
             "model": "hermes-agent",
             "stream": true,
             "messages": [
-                ["role": "system", "content": Brief.system(for: snapshot, hands: settings.isLocal ? .acts : .remote)],
+                ["role": "system", "content": Brief.system(for: snapshot, hands: settings.isLocal ? .acts : .remote, responses: responses)],
                 ["role": "user", "content": [
                     ["type": "text", "text": question],
                     ["type": "image_url", "image_url": ["url": image]],

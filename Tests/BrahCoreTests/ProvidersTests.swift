@@ -54,7 +54,8 @@ final class ProvidersTests: XCTestCase {
         var transcript = Transcript()
         transcript.add("What is this?", "A chart.")
         let request = AnthropicConnection.request(question: "And this?", snapshot: snapshot, key: "k",
-                                                  choice: ModelChoice(model: "claude-haiku-5-5"), transcript: transcript)
+                                                  choice: ModelChoice(model: "claude-haiku-5-5"), transcript: transcript,
+                                                  system: Brief.system(for: snapshot, hands: .none))
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "k")
         let json = try body(request)
         XCTAssertEqual(json["model"] as? String, "claude-haiku-5-5")
@@ -69,14 +70,14 @@ final class ProvidersTests: XCTestCase {
         let url = URL(string: "http://localhost:11434/v1")!
         let plain = OpenAICompatibleConnection.request(question: "Hi", snapshot: snapshot, baseURL: url, key: nil,
                                                        choice: ModelChoice(model: "m", effort: .max), sendsEffort: false,
-                                                       transcript: Transcript())
+                                                       transcript: Transcript(), system: "S")
         XCTAssertEqual(plain.url?.absoluteString, "http://localhost:11434/v1/chat/completions")
         XCTAssertNil(plain.value(forHTTPHeaderField: "Authorization"))
         XCTAssertNil(try body(plain)["reasoning_effort"])
 
         let withEffort = OpenAICompatibleConnection.request(question: "Hi", snapshot: snapshot, baseURL: url, key: "k",
                                                             choice: ModelChoice(model: "m", effort: .max), sendsEffort: true,
-                                                            transcript: Transcript())
+                                                            transcript: Transcript(), system: "S")
         XCTAssertEqual(try body(withEffort)["reasoning_effort"] as? String, "high")
     }
 
@@ -115,5 +116,18 @@ final class MarksTests: XCTestCase {
         let snapshot = Snapshot(jpeg: Data(), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
                                 cursor: .zero, appName: nil, windowTitle: nil)
         XCTAssertTrue(Brief.system(for: snapshot).contains("CIRCLE 380 210 140 40 Total"))
+    }
+}
+
+final class ResponsesTests: XCTestCase {
+    func testStyleAndInstructionsReachTheBrief() {
+        let snapshot = Snapshot(jpeg: Data(), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                                cursor: .zero, appName: nil, windowTitle: nil)
+        XCTAssertTrue(Brief.system(for: snapshot).contains("at most three short sentences"))
+        let responses = ResponseSettings(json: ["responses": ["style": "detailed", "instructions": " Call me Rez. "]])
+        let brief = Brief.system(for: snapshot, responses: responses)
+        XCTAssertTrue(brief.contains("as fully as the question needs"))
+        XCTAssertTrue(brief.hasSuffix("The user's own instructions for every answer:\nCall me Rez."))
+        XCTAssertEqual(ResponseSettings(json: responses.applied(to: [:])), ResponseSettings(style: .detailed, instructions: "Call me Rez."))
     }
 }

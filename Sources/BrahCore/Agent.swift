@@ -31,7 +31,7 @@ public enum Brief {
 
     /// The instructions every agent gets with a question. Short, because it rides on every turn.
     /// `.remote` is an agent on another computer: its screen tools would act there.
-    public static func system(for snapshot: Snapshot, hands: Hands = .acts) -> String {
+    public static func system(for snapshot: Snapshot, hands: Hands = .acts, responses: ResponseSettings = ResponseSettings()) -> String {
         let width = Int(snapshot.imageSize.width)
         let height = Int(snapshot.imageSize.height)
         let cx = Int(snapshot.cursor.x)
@@ -51,7 +51,7 @@ public enum Brief {
         they use, \(width)x\(height) pixels, origin top-left. A red ring marks their cursor at \
         (\(cx), \(cy)).\(place)
 
-        Answer in at most three short sentences. Your words are spoken aloud: no markdown, no lists, \
+        \(responses.style.instruction) Your words are spoken aloud: no markdown, no lists, \
         no code blocks. If showing a place on the screen helps, end with one line exactly like \
         POINT 412 230 Save button
         with x and y in screenshot pixels.
@@ -68,7 +68,7 @@ public enum Brief {
         \(guiding)
 
         \(hands == .acts ? acting : hands == .remote ? notActing : noHands)
-        """
+        """ + responses.custom
     }
 
     static let guiding = """

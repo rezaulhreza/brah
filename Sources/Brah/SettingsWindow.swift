@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import BrahCore
 import SwiftUI
 
@@ -73,6 +74,10 @@ final class SettingsModel: ObservableObject {
 
     @Published var settings: EditableSettings
     @Published var providers: ProviderSettings
+    @Published var responses: ResponseSettings
+    /// A Mac voice identifier. Empty: the best installed voice.
+    @Published var macVoice: String
+    private let preview = AVSpeechSynthesizer()
     /// Model ids from the provider, after a check.
     @Published var models: [String] = []
     @Published var check: (ok: Bool, text: String)?
@@ -102,6 +107,8 @@ final class SettingsModel: ObservableObject {
         }
         settings = EditableSettings(json: json)
         providers = ProviderSettings(json: json)
+        responses = ResponseSettings(json: json)
+        macVoice = SpeechSettings.macVoice(json: json)
         savedSecrets = Dictionary(uniqueKeysWithValues: Self.secretAccounts.map { ($0, Secrets.get($0) ?? "") })
         secrets = savedSecrets
 
@@ -115,6 +122,8 @@ final class SettingsModel: ObservableObject {
     private init(demo settings: EditableSettings, secrets: [String: String]) {
         self.settings = settings
         providers = ProviderSettings(active: .claude)
+        responses = ResponseSettings()
+        macVoice = ""
         self.secrets = secrets
         savedSecrets = secrets
         fileHasKey = false
@@ -229,7 +238,8 @@ final class SettingsModel: ObservableObject {
         }
 
         do {
-            try ConfigFile.write(providers.applied(to: settings.applied(to: try ConfigFile.read())))
+            let json = providers.applied(to: settings.applied(to: try ConfigFile.read()))
+            try ConfigFile.write(SpeechSettings.applied(macVoice, to: responses.applied(to: json)))
             for account in Self.secretAccounts where values[account, default: ""] != savedSecrets[account, default: ""] {
                 try Secrets.set(values[account, default: ""], for: account)
             }
@@ -238,6 +248,13 @@ final class SettingsModel: ObservableObject {
             return
         }
         onClose(true)
+    }
+
+    func playVoice() {
+        preview.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: "Ho, brah. This is how I sound.")
+        utterance.voice = AVSpeechSynthesisVoice(identifier: macVoice) ?? Voice.bestMacVoice
+        preview.speak(utterance)
     }
 
     /// Reaches the provider with the key in the field, and loads its models.
@@ -372,6 +389,27 @@ struct SettingsView: View {
             }
         }
 
+        Section {
+            Picker("Answers", selection: $model.responses.style) {
+                Text("Short").tag(ResponseSettings.Style.short)
+                Text("Normal").tag(ResponseSettings.Style.normal)
+                Text("Detailed").tag(ResponseSettings.Style.detailed)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Custom instructions")
+                TextEditor(text: $model.responses.instructions)
+                    .font(.body)
+                    .frame(height: 80)
+                    .scrollContentBackground(.hidden)
+                    .padding(4)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 6))
+            }
+        } header: {
+            Text("Responses")
+        } footer: {
+            note("Brah gives these to every provider, for example: “Call me Rez. Use British English.”")
+        }
+
         if model.providers.active == .hermes {
             Section {
                 DisclosureGroup("Advanced") {
@@ -412,6 +450,22 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var voiceSection: some View {
+        Section {
+            HStack {
+                Picker("Voice", selection: $model.macVoice) {
+                    Text("Best installed").tag("")
+                    ForEach(Voice.macVoices, id: \.identifier) { voice in
+                        Text(voiceName(voice)).tag(voice.identifier)
+                    }
+                }
+                Button("Play") { model.playVoice() }
+            }
+        } header: {
+            Text("Mac voice")
+        } footer: {
+            note("Used when your Mac speaks. Add better voices in System Settings, Accessibility, Spoken Content.")
+        }
+
         Section {
             TextField("Dashboard address", text: $model.settings.voiceURL,
                       prompt: Text(HermesVoiceSettings.defaultURL.absoluteString))
@@ -463,6 +517,11 @@ struct SettingsView: View {
             }
             .disabled(!model.settings.handsFree.enabled)
         }
+    }
+
+    private func voiceName(_ voice: AVSpeechSynthesisVoice) -> String {
+        let quality = voice.quality == .premium ? ", Premium" : voice.quality == .enhanced ? ", Enhanced" : ""
+        return "\(voice.name) (\(voice.language)\(quality))"
     }
 
     private func secret(_ account: String) -> Binding<String> {

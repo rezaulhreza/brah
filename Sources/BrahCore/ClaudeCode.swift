@@ -8,8 +8,11 @@ public actor ClaudeCodeConnection: AgentConnection {
     private var choice: ModelChoice
     private var sessionID: String?
 
-    public init(choice: ModelChoice) {
+    private let responses: ResponseSettings
+
+    public init(choice: ModelChoice, responses: ResponseSettings = ResponseSettings()) {
         self.choice = choice
+        self.responses = responses
     }
 
     public func reset() { sessionID = nil }
@@ -49,7 +52,7 @@ public actor ClaudeCodeConnection: AgentConnection {
 
         let process = Process()
         process.executableURL = claude
-        process.arguments = Self.arguments(choice: choice, system: Brief.system(for: snapshot, hands: .none), resume: sessionID)
+        process.arguments = Self.arguments(choice: choice, system: Brief.system(for: snapshot, hands: .none, responses: responses), resume: sessionID)
         process.currentDirectoryURL = folder
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin
