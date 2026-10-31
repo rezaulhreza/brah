@@ -234,6 +234,19 @@ private struct DragArea: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
+/// The bubble often shows without being the key window. The first click on a button must still
+/// press it, not only make the bubble key.
+private final class BubbleHostingView: NSHostingView<BubbleView> {
+    var onResize: () -> Void = {}
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        DispatchQueue.main.async { [weak self] in self?.onResize() }
+    }
+}
+
 /// A panel that takes typing without making Brah the active app, so the app the user works in
 /// stays in front.
 private final class BubblePanel: NSPanel {
@@ -267,9 +280,13 @@ final class Bubble {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.onEscape = onEscape
 
-        let host = NSHostingController(rootView: BubbleView(model: model))
-        host.sizingOptions = .preferredContentSize
-        panel.contentViewController = host
+        let host = BubbleHostingView(rootView: BubbleView(model: model))
+        host.sizingOptions = [.intrinsicContentSize]
+        host.onResize = { [weak panel, weak host] in
+            guard let panel, let size = host?.fittingSize, panel.frame.size != size else { return }
+            panel.setContentSize(size)
+        }
+        panel.contentView = host
 
         // The panel grows with its text. Keep its top-left corner where it opened, or where the
         // user dragged it.
