@@ -857,11 +857,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleMute()
     }
 
-    /// Mute stops the voice at once. The answer still shows in the bubble.
+    /// Mute stops the voice at once. The answer still shows in the bubble. Unmute says the answer
+    /// in the bubble: what has arrived so far, and the rest as it comes.
     private func toggleMute() {
         speaks.toggle()
         if !speaks {
             voice.stop()
+        } else if bubble.isVisible {
+            if work != nil, bubble.model.phase == .thinking || !shown.isEmpty {
+                voice.beginReply()
+                if !shown.isEmpty { voice.replyPiece(shown) }
+            } else if case .answer(let text) = bubble.model.phase {
+                voice.say(text)
+            } else if case .approval(let text) = bubble.model.phase {
+                voice.say(text)
+            }
         }
         speakItem?.state = speaks ? .on : .off
         bubble.model.muted = !speaks
