@@ -224,8 +224,11 @@ System Voice > Manage Voices.
 ## Roadmap
 
 1. **More providers.** The OpenAI API, the Codex subscription, and Ollama as its own choice.
-2. **Brah does the clicks.** Screen actions for every provider, not only Hermes. Auto mode acts
-   and asks first only before risky actions, with Allow, Always allow and Deny, by click or voice.
+2. **Brah does the clicks.** Screen actions for every provider, not only Hermes. Brah runs the
+   computer-use loop itself: the model asks for a click or a key, Brah checks it, does it, and
+   sends back a new screenshot until the task is done. Auto mode acts and asks first only before
+   risky actions, with Allow, Always allow and Deny, by click or voice. The Anthropic API comes
+   first, on a model that supports computer use.
 3. **More voices.** Speech to text from Groq, OpenAI Whisper and local models. OpenAI Realtime
    for live talk.
 4. **Agents.** Workflows you set up yourself, for example an onboarding guide for your team.
