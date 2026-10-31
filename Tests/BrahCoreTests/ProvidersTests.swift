@@ -92,3 +92,28 @@ final class ProvidersTests: XCTestCase {
         XCTAssertEqual(json["type"] as? String, "user")
     }
 }
+
+final class MarksTests: XCTestCase {
+    func testMarksParseAndLeaveTheText() {
+        let reply = Reply.parse("Look here.\nCIRCLE 380 210 140 40 Total\n[ARROW 1, 2 3 4 \"Go\"]\nUNDERLINE 1 2 3\nLINE 1 2 3")
+        XCTAssertEqual(reply.text, "Look here.\nLINE 1 2 3")
+        XCTAssertEqual(reply.marks, [
+            Mark(shape: .circle, numbers: [380, 210, 140, 40], label: "Total"),
+            Mark(shape: .arrow, numbers: [1, 2, 3, 4], label: "Go"),
+            Mark(shape: .underline, numbers: [1, 2, 3]),
+        ])
+    }
+
+    func testMarksAreNotSpoken() {
+        var filter = SpokenText()
+        let spoken = ["See", " the total.\nCIR", "CLE 380 210 140 40 Total\nBox", "es are fine."].map { filter.feed($0) }.joined()
+            + filter.finish()
+        XCTAssertEqual(spoken, "See the total.\n\nBoxes are fine.")
+    }
+
+    func testBriefTeachesMarks() {
+        let snapshot = Snapshot(jpeg: Data(), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                                cursor: .zero, appName: nil, windowTitle: nil)
+        XCTAssertTrue(Brief.system(for: snapshot).contains("CIRCLE 380 210 140 40 Total"))
+    }
+}

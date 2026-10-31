@@ -89,9 +89,10 @@ public struct SpokenText {
     enum PointMatch { case yes, maybe, no }
 
     // "POINT" or "STEP", then x and y. What follows them is the label.
-    private static let full = try! Regex(#"^(POINT|STEP)\s+-?[\d.]+,?\s+-?[\d.]+(\s|\]|$)"#)
+    private static let full = try! Regex(#"^(POINT|STEP|CIRCLE|BOX|UNDERLINE|ARROW|LINE)\s+-?[\d.]+,?\s+-?[\d.]+(\s|\]|$)"#)
     // A line that can still grow into one.
-    private static let partial = try! Regex(#"^(POINT|STEP)(\s+(-?[\d.]*(,?(\s+(-?[\d.]*)?)?)?)?)?$"#)
+    private static let partial = try! Regex(#"^(POINT|STEP|CIRCLE|BOX|UNDERLINE|ARROW|LINE)(\s+(-?[\d.]*(,?(\s+(-?[\d.]*)?)?)?)?)?$"#)
+    private static let keywords = ["POINT", "STEP", "CIRCLE", "BOX", "UNDERLINE", "ARROW", "LINE"]
     /// Lines that are one word for Brah: wait for a yes, or the guide is over.
     private static let words = ["ASK", "DONE"]
 
@@ -99,7 +100,7 @@ public struct SpokenText {
     static func match(_ line: String) -> PointMatch {
         let start = line.drop(while: { $0 == " " || $0 == "[" || $0 == "`" }).uppercased()
         if start.firstMatch(of: full) != nil { return .yes }
-        if "POINT".hasPrefix(start) || "STEP".hasPrefix(start) || start.wholeMatch(of: partial) != nil { return .maybe }
+        if keywords.contains(where: { $0.hasPrefix(start) }) || start.wholeMatch(of: partial) != nil { return .maybe }
         return .no
     }
 

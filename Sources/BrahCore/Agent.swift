@@ -56,6 +56,15 @@ public enum Brief {
         POINT 412 230 Save button
         with x and y in screenshot pixels.
 
+        To mark things up as on a whiteboard, add up to four lines like these, in screenshot pixels:
+        CIRCLE 380 210 140 40 Total
+        BOX 40 300 600 180 This table
+        UNDERLINE 120 512 360 The date
+        ARROW 700 100 520 210 Click here
+        LINE 100 400 180 380 260 420
+        CIRCLE and BOX take the top-left corner, width and height of the thing. ARROW goes from the \
+        tail to the tip. LINE is free-hand through its points. Mark only when it helps.
+
         \(guiding)
 
         \(hands == .acts ? acting : hands == .remote ? notActing : noHands)

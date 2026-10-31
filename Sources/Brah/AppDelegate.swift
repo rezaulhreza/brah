@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     lazy var bubble = Bubble(onEscape: { [weak self] in self?.escape() })
     let cursor = BrahCursor()
+    let marks = ScreenMarks()
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -326,6 +327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         work?.cancel()
         voice.stop()
+        marks.hide()
         awaitingApproval = false
         bubble.model.phase = .thinking
         bubble.model.step = nil
@@ -369,6 +371,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         point(at: spot, on: snapshot)
                     }
                 }
+                marks.show(reply.marks, on: snapshot)
             } catch {
                 guard !Task.isCancelled, workID == id else { return }
                 log("ask failed: \(error.localizedDescription)")
@@ -551,6 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Stop listening, stop the agent and stop talking. The bubble stays, so the user sees that
     /// it stopped. A hands-free conversation goes on listening.
     func stop() {
+        marks.hide()
         if pressedAt != nil {
             pressedAt = nil
             _ = recorder.stop()
@@ -588,6 +592,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Stop, end a conversation, and take every Brah window off the screen.
     func hide() {
+        marks.hide()
         endConversation()
         stop()
         bubble.hide()

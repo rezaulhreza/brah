@@ -13,6 +13,51 @@ public struct Spot: Equatable, Sendable {
     }
 }
 
+/// A mark Brah draws on the screen, as a person would on a whiteboard. Points are screenshot pixels.
+public struct Mark: Equatable, Sendable {
+    public enum Shape: String, CaseIterable, Sendable {
+        /// x y w h: an oval around the box.
+        case circle
+        /// x y w h
+        case box
+        /// x1 y x2
+        case underline
+        /// x1 y1 x2 y2, from the tail to the tip.
+        case arrow
+        /// x1 y1 x2 y2 …: a free-hand line through the points.
+        case line
+    }
+
+    public var shape: Shape
+    public var numbers: [Double]
+    public var label: String
+
+    public init(shape: Shape, numbers: [Double], label: String = "") {
+        self.shape = shape
+        self.numbers = numbers
+        self.label = label
+    }
+
+    static func parse(_ line: Substring) -> Mark? {
+        let parts = line.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]`"))
+            .split(separator: " ", omittingEmptySubsequences: true)
+        guard let first = parts.first, let shape = Shape(rawValue: first.lowercased()) else { return nil }
+        var numbers: [Double] = []
+        var rest = parts.dropFirst()
+        while let next = rest.first, let number = Double(next.trimmingCharacters(in: CharacterSet(charactersIn: ","))) {
+            numbers.append(number)
+            rest = rest.dropFirst()
+        }
+        switch shape {
+        case .circle, .box, .arrow: guard numbers.count == 4 else { return nil }
+        case .underline: guard numbers.count == 3 else { return nil }
+        case .line: guard numbers.count >= 4, numbers.count.isMultiple(of: 2) else { return nil }
+        }
+        let label = rest.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+        return Mark(shape: shape, numbers: numbers, label: label)
+    }
+}
+
 /// What the agent said, split into the words to show and speak, and the places it means.
 public struct Reply: Equatable, Sendable {
     public var text: String
@@ -23,6 +68,7 @@ public struct Reply: Equatable, Sendable {
     public var step: Spot?
     /// The guided task is complete.
     public var done: Bool
+    public var marks: [Mark] = []
 
     public init(text: String, point: Spot?, needsApproval: Bool = false, step: Spot? = nil, done: Bool = false) {
         self.text = text
@@ -45,6 +91,8 @@ public struct Reply: Equatable, Sendable {
                 reply.point = found
             } else if let found = placeLine(line, keyword: "STEP") {
                 reply.step = found
+            } else if let mark = Mark.parse(line) {
+                if reply.marks.count < 6 { reply.marks.append(mark) }
             } else if word == "ASK" {
                 reply.needsApproval = true
             } else if word == "DONE" {
