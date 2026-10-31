@@ -141,12 +141,15 @@ struct BubbleView: View {
     }
 
     private func control(_ symbol: String, help: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+        // A plain button takes clicks only on the glyph unless its label has a shape. A miss
+        // falls through to the drag area and moves the bubble instead.
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).frame(width: 22, height: 22)
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.secondary))
-        .contentShape(Rectangle())
         .help(help)
     }
 
@@ -178,6 +181,7 @@ private struct Answer: View {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 11, weight: .semibold))
                             .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
