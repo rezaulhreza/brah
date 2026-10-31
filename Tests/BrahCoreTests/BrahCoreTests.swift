@@ -577,4 +577,11 @@ final class GuideTests: XCTestCase {
         XCTAssertTrue(brief.contains("STEP 412 230 Export"))
         XCTAssertTrue(brief.contains("\nDONE\n"))
     }
+
+    func testUnclearReplyLetsTheAgentDecide() {
+        let question = Brief.replyToAsk("From this screen. Yeah. Click on the inbox tab.")
+        XCTAssertTrue(question.contains("\"From this screen. Yeah. Click on the inbox tab.\""))
+        XCTAssertTrue(question.contains("If they do not"))
+        XCTAssertTrue(question.contains("ASK"))
+    }
 }

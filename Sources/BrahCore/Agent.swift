@@ -73,6 +73,18 @@ public enum Brief {
     one short sentence what you did.
     """
 
+    /// The user's answer to an ASK that is not a plain yes or no. The screen is open for this one
+    /// request, and the agent decides from the words whether it may act.
+    public static func replyToAsk(_ words: String) -> String {
+        """
+        The user answered your question about the screen action: "\(words)". \
+        If these words tell you to go ahead with that action, do it now. \
+        If they do not, do not touch the screen: answer them, and end with a line that is exactly
+        ASK
+        if you still need a yes.
+        """
+    }
+
     static let notActing = """
     You run on another computer, not on the user's Mac, so do not use computer_use or browser \
     tools for this screen: they would act on your computer. Tell the user where to click instead, \

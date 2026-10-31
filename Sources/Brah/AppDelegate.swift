@@ -266,8 +266,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
                 bubble.model.question = words
-                if awaitingApproval, let yes = Phrases.approval(words) {
-                    yes ? approve() : deny()
+                if awaitingApproval {
+                    answered(words)
                 } else {
                     submit(words)
                 }
@@ -483,6 +483,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: hide)
     }
 
+    /// Words said while Brah waits for a yes. A plain yes or no decides at once. Other words go to
+    /// the agent with the screen open for that one request, and the agent decides from the words.
+    private func answered(_ words: String) {
+        if let yes = Phrases.approval(words) {
+            yes ? approve() : deny()
+            return
+        }
+        log("unclear answer, the agent decides: \(words.debugDescription)")
+        capture = Task { try await Capture.snapshot() }
+        submit(Brief.replyToAsk(words), approved: true)
+    }
+
     private func deny() {
         guard awaitingApproval else { return }
         log("not approved")
@@ -672,8 +684,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 endConversation(sayBye: true)
                 return
             }
-            if awaitingApproval, let yes = Phrases.approval(words) {
-                yes ? approve() : deny()
+            if awaitingApproval {
+                bubble.model.question = words
+                answered(words)
                 return
             }
             // "Okay" while the agent works after a yes is the user watching, not a new request. A new
