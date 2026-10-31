@@ -286,6 +286,8 @@ final class ConversationTests: XCTestCase {
 
     func testApproval() {
         XCTAssertEqual(Phrases.approval("Yes, go ahead."), true)
+        // Said while the agent works after a yes: it must not count as a new request.
+        XCTAssertEqual(Phrases.approval("Okay."), true)
         XCTAssertEqual(Phrases.approval("No, wait"), false)
         XCTAssertNil(Phrases.approval("Open Safari instead"))
     }

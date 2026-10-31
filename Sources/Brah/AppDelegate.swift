@@ -676,6 +676,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 yes ? approve() : deny()
                 return
             }
+            // "Okay" while the agent works after a yes is the user watching, not a new request. A new
+            // request would lock the screen and stop the task half done.
+            if bubble.model.acting, work != nil, Phrases.approval(words) == true {
+                log("kept working: \(words.debugDescription)")
+                return
+            }
             capture = Task { try await Capture.snapshot() }
             bubble.model.question = words
             submit(words)
