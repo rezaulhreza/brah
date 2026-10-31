@@ -126,8 +126,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             log("permissions: microphone \(microphone ? "allowed" : "NOT allowed"), speech recognition \(speech == .authorized ? "allowed" : "NOT allowed (\(speech.rawValue))")")
         }
         buildMenu()
+        buildMainMenu()
         if handsFreeOn {
             startWake()
+        }
+        if agent == nil, !CommandLine.arguments.contains("--ask") {
+            settingsWindow.show()
         }
         runTestArguments()
     }
@@ -863,6 +867,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.menu = menu
         statusItem = item
+    }
+
+    /// A menu bar app has no menu bar of its own, so ⌘, and the edit keys in Settings need one.
+    private func buildMainMenu() {
+        let app = NSMenu()
+        app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        app.addItem(.separator())
+        app.addItem(withTitle: "Quit Brah", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let main = NSMenu()
+        for menu in [app, edit] {
+            let item = NSMenuItem()
+            item.submenu = menu
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
     }
 
     /// A menu item that shows its global shortcut on the right, as macOS menus do.
