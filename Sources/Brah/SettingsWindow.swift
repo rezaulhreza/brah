@@ -2,7 +2,7 @@ import AppKit
 import BrahCore
 import SwiftUI
 
-/// The Settings window: the agent, the voice, the shortcuts and hands-free mode. It writes
+/// The Settings window: the AI provider, the voice, the shortcuts and hands-free mode. It writes
 /// `~/.config/brah/config.json` and puts the secrets in the Keychain. The app sets `onSave` to
 /// load the settings again.
 @MainActor
@@ -38,7 +38,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         // Tall enough for every section, but never taller than the screen.
         let room = (NSScreen.main?.visibleFrame.height ?? 900) - 60
-        window.setContentSize(NSSize(width: 480, height: min(1000, room)))
+        window.setContentSize(NSSize(width: 520, height: min(540, room)))
         window.delegate = self
         window.center()
         self.model = model
@@ -68,9 +68,14 @@ final class SettingsModel: ObservableObject {
     static let actions = [("talk", "Talk"), ("stop", "Stop"), ("mute", "Mute"), ("hide", "Hide"), ("handsFree", "Hands-free")]
 
     /// The Keychain accounts that the window shows.
-    static let secretAccounts = [Secrets.hermesKey, Secrets.voicePassword, Secrets.accessClientID, Secrets.accessClientSecret]
+    static let secretAccounts = [Secrets.hermesKey, Secrets.voicePassword, Secrets.accessClientID, Secrets.accessClientSecret,
+                                 Secrets.anthropicKey, Secrets.customKey]
 
     @Published var settings: EditableSettings
+    @Published var providers: ProviderSettings
+    /// Model ids from the provider, after a check.
+    @Published var models: [String] = []
+    @Published var check: (ok: Bool, text: String)?
     /// The secrets in the fields, by Keychain account.
     @Published var secrets: [String: String]
     /// The name of the shortcut that waits for keys.
@@ -96,6 +101,7 @@ final class SettingsModel: ObservableObject {
             saveProblem = Self.text(error)
         }
         settings = EditableSettings(json: json)
+        providers = ProviderSettings(json: json)
         savedSecrets = Dictionary(uniqueKeysWithValues: Self.secretAccounts.map { ($0, Secrets.get($0) ?? "") })
         secrets = savedSecrets
 
@@ -108,6 +114,7 @@ final class SettingsModel: ObservableObject {
     /// Made-up values for screenshots. A demo never reads or writes the real settings.
     private init(demo settings: EditableSettings, secrets: [String: String]) {
         self.settings = settings
+        providers = ProviderSettings(active: .claude)
         self.secrets = secrets
         savedSecrets = secrets
         fileHasKey = false
@@ -209,8 +216,20 @@ final class SettingsModel: ObservableObject {
             return
         }
 
+        if providers.active == .custom {
+            guard let url = URL(string: providers.customURL.trimmingCharacters(in: .whitespaces)),
+                  ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else {
+                saveProblem = "The server address must start with http:// or https://."
+                return
+            }
+            guard !providers.custom.model.trimmingCharacters(in: .whitespaces).isEmpty else {
+                saveProblem = "Pick a model for the server."
+                return
+            }
+        }
+
         do {
-            try ConfigFile.write(settings.applied(to: try ConfigFile.read()))
+            try ConfigFile.write(providers.applied(to: settings.applied(to: try ConfigFile.read())))
             for account in Self.secretAccounts where values[account, default: ""] != savedSecrets[account, default: ""] {
                 try Secrets.set(values[account, default: ""], for: account)
             }
@@ -219,6 +238,35 @@ final class SettingsModel: ObservableObject {
             return
         }
         onClose(true)
+    }
+
+    /// Reaches the provider with the key in the field, and loads its models.
+    func checkProvider() async {
+        check = nil
+        models = []
+        do {
+            switch providers.active {
+            case .hermes:
+                check = (true, "Save, then ask Brah a question to check Hermes.")
+                return
+            case .claude:
+                guard let path = ClaudeCodeConnection.executable() else { throw ProviderError.notInstalled }
+                check = (true, "Claude Code found at \(path.path). It uses your Claude sign-in.")
+                return
+            case .anthropic:
+                let key = secrets[Secrets.anthropicKey, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty else { throw ProviderError.noKey("the Anthropic API") }
+                models = try await AnthropicConnection.models(key: key)
+            case .custom:
+                guard let url = URL(string: providers.customURL.trimmingCharacters(in: .whitespaces)), url.scheme != nil else {
+                    throw ProviderError.offline
+                }
+                models = try await OpenAICompatibleConnection.models(baseURL: url, key: secrets[Secrets.customKey])
+            }
+            check = (true, "Connected. \(models.count) models.")
+        } catch {
+            check = (false, error.localizedDescription)
+        }
     }
 
     func cancel() {
@@ -240,70 +288,20 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Form {
-                Section("Agent") {
-                    TextField("Hermes address", text: $model.settings.hermesURL,
-                              prompt: Text(HermesSettings.defaultURL.absoluteString))
-                    SecureField("API key", text: secret(Secrets.hermesKey),
-                                prompt: Text(model.fileHasKey ? "Saved in config.json" : "Not set"))
-                    note("Hermes can run on this Mac or on a server, with an http:// or https:// address. "
-                         + (model.fileHasKey
-                            ? "With no key here, Brah uses the key in ~/.config/brah/config.json."
-                            : "With no key, Brah reads API_SERVER_KEY from ~/.hermes/.env."))
+            TabView {
+                Form { providerSection }
+                    .formStyle(.grouped)
+                    .tabItem { Label("AI", systemImage: "sparkles") }
+                Form { voiceSection }
+                    .formStyle(.grouped)
+                    .tabItem { Label("Voice", systemImage: "waveform") }
+                Form {
+                    shortcutsSection
+                    handsFreeSection
                 }
-
-                Section("Voice") {
-                    TextField("Dashboard address", text: $model.settings.voiceURL,
-                              prompt: Text(HermesVoiceSettings.defaultURL.absoluteString))
-                    TextField("Username", text: $model.settings.voiceUsername, prompt: Text("Not set"))
-                    SecureField("Password", text: secret(Secrets.voicePassword),
-                                prompt: Text(model.fileHasPassword ? "Saved in config.json" : "Not set"))
-                    note("The username and password are only for a dashboard with a sign-in. With the deepgram-live plugin, Brah uses your live voice.")
-                }
-
-                Section("Cloudflare Access") {
-                    TextField("Access client ID", text: secret(Secrets.accessClientID), prompt: Text("Not set"))
-                    SecureField("Access client secret", text: secret(Secrets.accessClientSecret), prompt: Text("Not set"))
-                    note("Only for a server behind Cloudflare Access. Brah sends this pair to the Hermes address and to the dashboard.")
-                }
-
-                Section {
-                    ForEach(SettingsModel.actions, id: \.0) { name, title in
-                        LabeledContent(title) {
-                            Button {
-                                model.toggleRecording(name)
-                            } label: {
-                                Text(model.recording == name ? "Press keys…" : model.settings.shortcuts[name]?.display ?? "")
-                                    .frame(width: 110)
-                            }
-                        }
-                        if let problem = model.problem(for: name) {
-                            Text(problem)
-                                .font(.callout)
-                                .foregroundStyle(.red)
-                        }
-                    }
-                } header: {
-                    Text("Shortcuts")
-                } footer: {
-                    note("Click a shortcut, then press the new keys. Esc cancels.")
-                }
-
-                Section("Hands-free") {
-                    Toggle("Listen for “Hey Brah”", isOn: $model.settings.handsFree.enabled)
-                    LabeledContent("Stop after") {
-                        HStack {
-                            Text("\(model.settings.handsFree.idleSeconds) seconds of quiet")
-                                .monospacedDigit()
-                            Stepper("Stop after", value: $model.settings.handsFree.idleSeconds,
-                                    in: HandsFreeSettings.idleRange, step: 5)
-                                .labelsHidden()
-                        }
-                    }
-                    .disabled(!model.settings.handsFree.enabled)
-                }
+                .formStyle(.grouped)
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             }
-            .formStyle(.grouped)
 
             HStack {
                 if let problem = model.saveProblem {
@@ -321,8 +319,150 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 480)
-        .frame(minHeight: 420, maxHeight: .infinity)
+        .frame(width: 520)
+        .frame(minHeight: 480, maxHeight: .infinity)
+        .onChange(of: model.providers.active) {
+            model.check = nil
+            model.models = []
+        }
+    }
+
+    @ViewBuilder
+    private var providerSection: some View {
+        Section {
+            Picker("Provider", selection: $model.providers.active) {
+                ForEach(ProviderKind.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+        } footer: {
+            note(providerNote)
+        }
+
+        Section {
+            switch model.providers.active {
+            case .hermes:
+                TextField("Address", text: $model.settings.hermesURL, prompt: Text(HermesSettings.defaultURL.absoluteString))
+                SecureField("API key", text: secret(Secrets.hermesKey),
+                            prompt: Text(model.fileHasKey ? "Saved in config.json" : "From ~/.hermes/.env"))
+            case .claude:
+                Picker("Model", selection: $model.providers.claude.model) {
+                    ForEach(ProviderSettings.claudeModels, id: \.self) { Text($0.capitalized).tag($0) }
+                }
+                effortPicker($model.providers.claude.effort)
+            case .anthropic:
+                SecureField("API key", text: secret(Secrets.anthropicKey), prompt: Text("sk-ant-…"))
+                modelField($model.providers.anthropic.model)
+                effortPicker($model.providers.anthropic.effort)
+            case .custom:
+                TextField("Server", text: $model.providers.customURL, prompt: Text("http://localhost:11434/v1"))
+                SecureField("API key", text: secret(Secrets.customKey), prompt: Text("Optional"))
+                modelField($model.providers.custom.model)
+                Toggle("Send effort", isOn: $model.providers.customSendsEffort)
+                if model.providers.customSendsEffort {
+                    effortPicker($model.providers.custom.effort)
+                }
+            }
+            HStack {
+                Button("Check") { Task { await model.checkProvider() } }
+                if let check = model.check {
+                    Text(check.text)
+                        .font(.callout)
+                        .foregroundStyle(check.ok ? Color.secondary : Color.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+
+        if model.providers.active == .hermes {
+            Section {
+                DisclosureGroup("Advanced") {
+                    TextField("Access client ID", text: secret(Secrets.accessClientID), prompt: Text("Not set"))
+                    SecureField("Access client secret", text: secret(Secrets.accessClientSecret), prompt: Text("Not set"))
+                    note("Only for a Hermes server behind Cloudflare Access.")
+                }
+            }
+        }
+    }
+
+    private var providerNote: String {
+        switch model.providers.active {
+        case .hermes: "Your own Hermes agent, on this Mac or on a server. It can click for you after a yes."
+        case .claude: "Uses your Claude plan through Claude Code. Install it and sign in once."
+        case .anthropic: "Pay per use with a key from console.anthropic.com."
+        case .custom: "Any server with an OpenAI-style API: Ollama, LM Studio, OpenRouter, Groq. Pick a model that can see images."
+        }
+    }
+
+    private func modelField(_ text: Binding<String>) -> some View {
+        HStack {
+            TextField("Model", text: text)
+            if !model.models.isEmpty {
+                Menu("Models") {
+                    ForEach(model.models, id: \.self) { name in Button(name) { text.wrappedValue = name } }
+                }
+                .fixedSize()
+            }
+        }
+    }
+
+    private func effortPicker(_ effort: Binding<Effort>) -> some View {
+        Picker("Effort", selection: effort) {
+            ForEach(Effort.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+        }
+    }
+
+    @ViewBuilder
+    private var voiceSection: some View {
+        Section {
+            TextField("Dashboard address", text: $model.settings.voiceURL,
+                      prompt: Text(HermesVoiceSettings.defaultURL.absoluteString))
+            TextField("Username", text: $model.settings.voiceUsername, prompt: Text("Not set"))
+            SecureField("Password", text: secret(Secrets.voicePassword),
+                        prompt: Text(model.fileHasPassword ? "Saved in config.json" : "Not set"))
+        } header: {
+            Text("Hermes voice")
+        } footer: {
+            note("Optional. Without it, your Mac listens and speaks. The username and password are only for a dashboard with a sign-in.")
+        }
+    }
+
+    private var shortcutsSection: some View {
+        Section {
+            ForEach(SettingsModel.actions, id: \.0) { name, title in
+                LabeledContent(title) {
+                    Button {
+                        model.toggleRecording(name)
+                    } label: {
+                        Text(model.recording == name ? "Press keys…" : model.settings.shortcuts[name]?.display ?? "")
+                            .frame(width: 110)
+                    }
+                }
+                if let problem = model.problem(for: name) {
+                    Text(problem)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+            }
+        } header: {
+            Text("Shortcuts")
+        } footer: {
+            note("Click a shortcut, then press the new keys. Esc cancels.")
+        }
+    }
+
+    private var handsFreeSection: some View {
+        Section("Hands-free") {
+            Toggle("Listen for “Hey Brah”", isOn: $model.settings.handsFree.enabled)
+            LabeledContent("Stop after") {
+                HStack {
+                    Text("\(model.settings.handsFree.idleSeconds) seconds of quiet")
+                        .monospacedDigit()
+                    Stepper("Stop after", value: $model.settings.handsFree.idleSeconds,
+                            in: HandsFreeSettings.idleRange, step: 5)
+                        .labelsHidden()
+                }
+            }
+            .disabled(!model.settings.handsFree.enabled)
+        }
     }
 
     private func secret(_ account: String) -> Binding<String> {
