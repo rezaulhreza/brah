@@ -1060,7 +1060,7 @@ extension AppDelegate {
     /// page, so a web page cannot give Brah instructions.
     static let tour = [
         "What is this page? Show me its main parts.",
-        "Which month had the highest revenue? Show me on the chart.",
+        "Open Growth, then the Revenue tab. Which month had the highest revenue? Show me on the chart.",
         "Switch the date range to Last 90 days.",
         "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
         "Create a campaign named Winter Push for Trial users, and launch it.",
@@ -1070,12 +1070,22 @@ extension AppDelegate {
     /// `brah://tour` and `brah://stop` from the benchmark page's tour button.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first(where: { $0.scheme == "brah" }) else { return }
+        // Opening a link makes Brah the active app; give the focus back to the browser.
+        NSApp.deactivate()
         if url.host == "stop", touring {
             log("tour: stopped from the page")
             stop()
         } else if url.host == "tour", !touring {
             Task { await runTour() }
         }
+    }
+
+    /// The title of the top normal window that is not Brah's own.
+    static func topWindowTitle() -> String? {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        let top = list?.first { ($0[kCGWindowLayer as String] as? Int) == 0 && ($0[kCGWindowOwnerPID as String] as? pid_t) != me }
+        return top?[kCGWindowName as String] as? String
     }
 
     /// What the benchmark page shows on its tour button.
@@ -1093,8 +1103,8 @@ extension AppDelegate {
         defer { touring = false }
         try? await Task.sleep(for: .seconds(1.5))
         // Only on the benchmark page: on any other screen the fixed steps could do real things.
-        guard let first = try? await Capture.snapshot(), first.windowTitle?.contains("Brah benchmark") == true else {
-            log("tour: refused, the front window is not the Brah benchmark page")
+        guard let title = Self.topWindowTitle(), title.contains("Brah benchmark") else {
+            log("tour: refused, the top window is \(Self.topWindowTitle().map { "\"\($0)\"" } ?? "not known"), not the Brah benchmark page")
             return
         }
         log("tour: start")

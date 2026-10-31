@@ -199,6 +199,11 @@ final class ScreenToolTests: XCTestCase {
         XCTAssertTrue(ScreenTool.isRisky(label: "Open tab", flagged: true))
         XCTAssertFalse(ScreenTool.isRisky(label: "Open the Acquisition tab", flagged: false))
         XCTAssertFalse(ScreenTool.isRisky(label: "Orders page", flagged: false))
+        XCTAssertFalse(ScreenTool.isRisky(label: "Open send time dropdown", flagged: false))
+        XCTAssertFalse(ScreenTool.isRisky(label: "View order #1024", flagged: false))
+        XCTAssertTrue(ScreenTool.isRisky(label: "Confirm send invoice", flagged: false))
+        XCTAssertTrue(ScreenTool.isRisky(label: "Sign in with Google", flagged: false))
+        XCTAssertFalse(ScreenTool.isRisky(label: "Sign up form", flagged: false))
     }
 
     func testKeyPress() {

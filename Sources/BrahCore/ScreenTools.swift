@@ -104,14 +104,16 @@ public enum ScreenTool {
          ]]],
     ]
 
-    private static let riskyWords = ["send", "pay", "purchase", "buy", "order", "delete", "remove", "erase", "publish", "post",
-                                     "submit", "confirm", "transfer", "refund", "launch", "sign in", "log in", "password",
-                                     "unsubscribe", "cancel subscription"]
+    private static let riskyVerbs: Set<String> = ["send", "pay", "purchase", "buy", "delete", "remove", "erase", "publish", "post",
+                                                  "submit", "confirm", "transfer", "refund", "launch", "unsubscribe", "share"]
 
-    /// An action needs a yes first when the agent says so, or when its label sounds like one.
+    /// An action needs a yes first when the agent says so, or when its label starts with a risky
+    /// verb: "Send invoice" does, "Open send time menu" does not.
     public static func isRisky(label: String, flagged: Bool) -> Bool {
         if flagged { return true }
-        let words = Phrases.normalise(label)
-        return riskyWords.contains { words.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }
+        let words = Phrases.normalise(label).split(separator: " ").map(String.init)
+        guard let verb = words.first else { return false }
+        if verb == "sign" || verb == "log" { return words.dropFirst().first == "in" }
+        return riskyVerbs.contains(verb)
     }
 }
