@@ -31,6 +31,8 @@ p{margin:0 0 10px}
 .spacer{flex:1}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 a.btn.primary:hover{background:var(--accent-hover)}
+.btn.primary.running{background:#1b1f24;border-color:#1b1f24}
+.brah-state{font-size:13px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 
 /* Shell */
@@ -329,6 +331,7 @@ canvas{display:block}
       </div>
       <div class="spacer"></div>
       <a class="btn primary" id="watch-brah" href="brah://tour" aria-describedby="watch-brah-note" data-tip="Watch Brah do it|Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.">Watch Brah do it</a>
+      <span class="brah-state muted" id="brah-state" aria-live="polite"></span>
       <span class="sr-only" id="watch-brah-note">Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.</span>
       <div class="menu-wrap">
         <button class="btn" id="range-btn" data-action="range-toggle" aria-haspopup="menu" aria-expanded="false"><span class="muted">Date range:</span> <span id="range-label">Last 30 days</span> <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
@@ -1509,6 +1512,28 @@ window.addEventListener('resize', drawRegionCanvas);
 /* ---------- Start ---------- */
 render(); renderTasks(); renderLog();
 log('result', 'Benchmark page loaded');
+
+// The tour button follows Brah: Brah reports its tour state on a read-only local address.
+(function followBrah() {
+  const button = document.getElementById('watch-brah');
+  const line = document.getElementById('brah-state');
+  async function poll() {
+    try {
+      const s = await (await fetch('http://127.0.0.1:47719/tour', { cache: 'no-store' })).json();
+      button.classList.toggle('running', s.running);
+      button.href = s.running ? 'brah://stop' : 'brah://tour';
+      button.textContent = s.running ? `Step ${s.step} of ${s.total} · Stop` : s.finished ? 'Watch again' : 'Watch Brah do it';
+      line.textContent = s.running ? `Brah: ${s.doing || s.question}` : s.busy ? 'Brah is busy' : '';
+    } catch {
+      button.classList.remove('running');
+      button.href = 'brah://tour';
+      button.textContent = 'Watch Brah do it';
+      line.textContent = 'Brah is not running';
+    }
+  }
+  poll();
+  setInterval(poll, 1000);
+})();
 </script>
 </body>
 </html>

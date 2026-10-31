@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A risky screen action waits here for the user's answer.
     private var pendingAction: CheckedContinuation<ScreenActions.Approval, Never>?
     private var touring = false
+    private var tourStep = 0
+    private var tourFinished = false
+    private var statusServer: StatusServer?
     private let recorder = Recorder()
     private var voice = Voice(hermes: nil)
     private var agent: AgentConnection?
@@ -196,6 +199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.cursor.show(at: snapshot.viewPoint(spot), label: spot.label, on: snapshot.screenFrame)
         }
         actions.passThrough = { [weak self] on in self?.bubble.passThrough(on) }
+        statusServer = try? StatusServer { [weak self] in self?.tourStatus() ?? Data() }
+        statusServer?.start()
         toolServer = try? ToolServer(actions: actions)
         tools = toolServer?.start()
         log("screen tools: \(tools?.url.absoluteString ?? "none"), accessibility \(AXIsProcessTrusted() ? "allowed" : "NOT allowed")")
@@ -1062,10 +1067,25 @@ extension AppDelegate {
         "Find order #1024 and send its invoice.",
     ]
 
-    /// `brah://tour` from the benchmark page's "Watch Brah do it" button.
+    /// `brah://tour` and `brah://stop` from the benchmark page's tour button.
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard urls.contains(where: { $0.scheme == "brah" && $0.host == "tour" }), !touring else { return }
-        Task { await runTour() }
+        guard let url = urls.first(where: { $0.scheme == "brah" }) else { return }
+        if url.host == "stop", touring {
+            log("tour: stopped from the page")
+            stop()
+        } else if url.host == "tour", !touring {
+            Task { await runTour() }
+        }
+    }
+
+    /// What the benchmark page shows on its tour button.
+    func tourStatus() -> Data {
+        let status: [String: Any] = [
+            "running": touring, "step": tourStep, "total": Self.tour.count,
+            "question": touring && tourStep > 0 ? Self.tour[tourStep - 1] : "",
+            "doing": touring ? bubble.model.step ?? "" : "", "finished": tourFinished, "busy": work != nil,
+        ]
+        return (try? JSONSerialization.data(withJSONObject: status)) ?? Data()
     }
 
     private func runTour() async {
@@ -1078,10 +1098,12 @@ extension AppDelegate {
             return
         }
         log("tour: start")
+        tourFinished = false
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         let corner = screen.map { CGPoint(x: $0.visibleFrame.maxX - 380, y: $0.visibleFrame.minY + 260) } ?? NSEvent.mouseLocation
-        for question in Self.tour {
+        for (index, question) in Self.tour.enumerated() {
             guard touring else { return }
+            tourStep = index + 1
             capture = Task { try await Capture.snapshot() }
             bubble.show(near: corner, phase: .thinking, typing: false)
             bubble.model.question = question
@@ -1092,6 +1114,7 @@ extension AppDelegate {
             }
             try? await Task.sleep(for: .seconds(2.5))
         }
+        tourFinished = true
         log("tour: done")
     }
 }
