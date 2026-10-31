@@ -26,6 +26,16 @@ public struct Mark: Equatable, Sendable {
         case arrow
         /// x1 y1 x2 y2 …: a free-hand line through the points.
         case line
+        /// x y w h: a marker-pen stroke over text.
+        case highlight
+        /// x y w h: crossed out.
+        case cross
+        /// x y: a tick at the point.
+        case tick
+        /// x y n: a numbered badge, for steps.
+        case number
+        /// x y w h: everything else goes dim.
+        case spotlight
     }
 
     public var shape: Shape
@@ -49,8 +59,9 @@ public struct Mark: Equatable, Sendable {
             rest = rest.dropFirst()
         }
         switch shape {
-        case .circle, .box, .arrow: guard numbers.count == 4 else { return nil }
-        case .underline: guard numbers.count == 3 else { return nil }
+        case .circle, .box, .arrow, .highlight, .cross, .spotlight: guard numbers.count == 4 else { return nil }
+        case .underline, .number: guard numbers.count == 3 else { return nil }
+        case .tick: guard numbers.count == 2 else { return nil }
         case .line: guard numbers.count >= 4, numbers.count.isMultiple(of: 2) else { return nil }
         }
         let label = rest.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
@@ -92,7 +103,7 @@ public struct Reply: Equatable, Sendable {
             } else if let found = placeLine(line, keyword: "STEP") {
                 reply.step = found
             } else if let mark = Mark.parse(line) {
-                if reply.marks.count < 6 { reply.marks.append(mark) }
+                if reply.marks.count < 8 { reply.marks.append(mark) }
             } else if word == "ASK" {
                 reply.needsApproval = true
             } else if word == "DONE" {

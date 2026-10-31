@@ -105,6 +105,15 @@ final class MarksTests: XCTestCase {
         ])
     }
 
+    func testWhiteboardMarks() {
+        let reply = Reply.parse("Here.\nHIGHLIGHT 1 2 3 4 Answer\nNUMBER 5 6 2 Next\nTICK 7 8\nCROSS 1 2 3 4\nSPOTLIGHT 1 2 3 4\nTICK 1 2 3")
+        XCTAssertEqual(reply.text, "Here.\nTICK 1 2 3")
+        XCTAssertEqual(reply.marks.map(\.shape), [.highlight, .number, .tick, .cross, .spotlight])
+        XCTAssertEqual(reply.marks[1], Mark(shape: .number, numbers: [5, 6, 2], label: "Next"))
+        var filter = SpokenText()
+        XCTAssertEqual(filter.feed("Look.\nSPOTLIGHT 1 2 3 4\nDone.") + filter.finish(), "Look.\n\nDone.")
+    }
+
     func testMarksAreNotSpoken() {
         var filter = SpokenText()
         let spoken = ["See", " the total.\nCIR", "CLE 380 210 140 40 Total\nBox", "es are fine."].map { filter.feed($0) }.joined()

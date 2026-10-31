@@ -20,7 +20,8 @@ final class ScreenMarks {
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         let scale = CGFloat(snapshot.scale)
-        panel.contentView = NSHostingView(rootView: MarksView(marks: marks.map { DrawnMark($0, scale: scale) }))
+        let drawn = marks.map { DrawnMark($0, scale: scale) }
+        panel.contentView = NSHostingView(rootView: MarksView(marks: drawn.filter { $0.shape == .spotlight } + drawn.filter { $0.shape != .spotlight }))
         panel.setFrame(snapshot.screenFrame, display: true)
         panel.orderFrontRegardless()
         self.panel = panel
@@ -49,17 +50,25 @@ struct DrawnMark {
         shape = mark.shape
         label = mark.label
         seed = mark.numbers.reduce(0, +).truncatingRemainder(dividingBy: 97)
+        number = mark.shape == .number ? Int(mark.numbers[2]) : 0
         switch mark.shape {
-        case .circle, .box: points = [CGPoint(x: n[0], y: n[1]), CGPoint(x: n[0] + n[2], y: n[1] + n[3])]
+        case .circle, .box, .highlight, .cross, .spotlight: points = [CGPoint(x: n[0], y: n[1]), CGPoint(x: n[0] + n[2], y: n[1] + n[3])]
         case .underline: points = [CGPoint(x: n[0], y: n[1]), CGPoint(x: n[2], y: n[1])]
+        case .tick, .number: points = [CGPoint(x: n[0], y: n[1])]
         case .arrow, .line: points = stride(from: 0, to: n.count - 1, by: 2).map { CGPoint(x: n[$0], y: n[$0 + 1]) }
         }
     }
 
+    let number: Int
+    var rect: CGRect {
+        CGRect(x: points[0].x, y: points[0].y, width: points.last!.x - points[0].x, height: points.last!.y - points[0].y)
+    }
+
     var labelAnchor: CGPoint {
         switch shape {
-        case .circle, .box: CGPoint(x: points[0].x, y: points[0].y - 30)
+        case .circle, .box, .highlight, .cross, .spotlight: CGPoint(x: points[0].x, y: points[0].y - 30)
         case .underline: CGPoint(x: points[0].x, y: points[0].y + 10)
+        case .tick, .number: CGPoint(x: points[0].x + 22, y: points[0].y - 12)
         case .arrow, .line: CGPoint(x: points[0].x, y: points[0].y + 8)
         }
     }
@@ -113,6 +122,23 @@ struct DrawnMark {
                 path.move(to: tip)
                 path.addLine(to: CGPoint(x: tip.x + 16 * cos(wing), y: tip.y + 16 * sin(wing)))
             }
+        case .highlight:
+            let rect = rect
+            path.move(to: CGPoint(x: rect.minX - 4, y: rect.midY + wobble(1)))
+            path.addLine(to: CGPoint(x: rect.maxX + 6, y: rect.midY - 1.5 * wobble(2)))
+        case .cross:
+            let rect = rect.insetBy(dx: -4, dy: -4)
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY + 2 * wobble(1)))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.move(to: CGPoint(x: rect.maxX + 2 * wobble(2), y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY + 2 * wobble(3)))
+        case .tick:
+            let p = points[0]
+            path.move(to: CGPoint(x: p.x - 13, y: p.y - 1))
+            path.addLine(to: CGPoint(x: p.x - 3, y: p.y + 10))
+            path.addQuadCurve(to: CGPoint(x: p.x + 18, y: p.y - 18), control: CGPoint(x: p.x + 4, y: p.y - 6))
+        case .number, .spotlight:
+            break
         case .line:
             path.move(to: points[0])
             for i in 1..<points.count {
@@ -121,6 +147,16 @@ struct DrawnMark {
                                                           y: (from.y + to.y) / 2 - 3 * wobble(Double(i) + 0.5)))
             }
         }
+        return path
+    }
+}
+
+private struct Spotlight: Shape {
+    let hole: CGRect
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        path.addRoundedRect(in: hole, cornerSize: CGSize(width: 14, height: 14))
         return path
     }
 }
@@ -147,21 +183,47 @@ private struct DrawnMarkView: View {
     static let yellow = Color(red: 1, green: 0.77, blue: 0.19)
     let mark: DrawnMark
     let delay: Double
+
+    private var color: Color {
+        switch mark.shape {
+        case .tick: Color(red: 0.2, green: 0.78, blue: 0.4)
+        case .cross: Color(red: 0.95, green: 0.32, blue: 0.27)
+        default: Self.yellow
+        }
+    }
     @State private var drawn: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            MarkShape(mark: mark).trim(from: 0, to: drawn)
-                .stroke(Color.black.opacity(0.35), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
-            MarkShape(mark: mark).trim(from: 0, to: drawn)
-                .stroke(Self.yellow, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            switch mark.shape {
+            case .spotlight:
+                Spotlight(hole: mark.rect.insetBy(dx: -12, dy: -12))
+                    .fill(Color.black.opacity(0.45 * drawn), style: FillStyle(eoFill: true))
+            case .number:
+                Text("\(mark.number)")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(white: 0.1))
+                    .frame(width: 30, height: 30)
+                    .background(Self.yellow, in: Circle())
+                    .overlay(Circle().strokeBorder(Color(white: 0.1), lineWidth: 2))
+                    .scaleEffect(drawn)
+                    .offset(x: mark.points[0].x - 15, y: mark.points[0].y - 15)
+            case .highlight:
+                MarkShape(mark: mark).trim(from: 0, to: drawn)
+                    .stroke(Self.yellow.opacity(0.42), style: StrokeStyle(lineWidth: mark.rect.height + 8, lineCap: .butt))
+            default:
+                MarkShape(mark: mark).trim(from: 0, to: drawn)
+                    .stroke(Color.black.opacity(0.35), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+                MarkShape(mark: mark).trim(from: 0, to: drawn)
+                    .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            }
             if !mark.label.isEmpty {
                 Text(mark.label)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(white: 0.1))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Self.yellow, in: Capsule())
+                    .background(color, in: Capsule())
                     .fixedSize()
                     .offset(x: mark.labelAnchor.x, y: mark.labelAnchor.y)
                     .opacity(drawn)

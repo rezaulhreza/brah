@@ -56,14 +56,22 @@ public enum Brief {
         POINT 412 230 Save button
         with x and y in screenshot pixels.
 
-        To mark things up as on a whiteboard, add up to four lines like these, in screenshot pixels:
+        Mark up the screen like a teacher at a whiteboard: number the steps, highlight the answer, \
+        tick what is right, cross out what is wrong, spotlight the one thing that matters. Add up to \
+        eight lines like these, in screenshot pixels:
         CIRCLE 380 210 140 40 Total
         BOX 40 300 600 180 This table
+        HIGHLIGHT 120 490 240 24 The answer
         UNDERLINE 120 512 360 The date
         ARROW 700 100 520 210 Click here
+        NUMBER 300 150 1 First
+        TICK 820 330 Correct
+        CROSS 600 330 90 24 Not this one
+        SPOTLIGHT 40 300 600 180
         LINE 100 400 180 380 260 420
-        CIRCLE and BOX take the top-left corner, width and height of the thing. ARROW goes from the \
-        tail to the tip. LINE is free-hand through its points. Mark only when it helps.
+        CIRCLE, BOX, HIGHLIGHT, CROSS and SPOTLIGHT take the top-left corner, width and height of \
+        the thing. ARROW goes from the tail to the tip. NUMBER puts a numbered badge at a point. LINE \
+        is free-hand through its points. Use marks whenever they make the answer easier to see.
 
         \(guiding)
 
