@@ -1,0 +1,94 @@
+import CoreGraphics
+import Foundation
+import XCTest
+@testable import BrahCore
+
+final class ProvidersTests: XCTestCase {
+    let snapshot = Snapshot(jpeg: Data([1, 2, 3]), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                            cursor: .zero, appName: nil, windowTitle: nil)
+
+    private func body(_ request: URLRequest) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+    }
+
+    func testDefaultsAreHermesThenHaikuAtMedium() {
+        let settings = ProviderSettings(json: [:])
+        XCTAssertEqual(settings.active, .hermes)
+        XCTAssertEqual(settings.claude, ModelChoice(model: "haiku", effort: .medium))
+        XCTAssertEqual(settings.anthropic, ModelChoice(model: "claude-haiku-5-5", effort: .medium))
+        XCTAssertNil(settings.effort)
+    }
+
+    func testSettingsRoundTripAndKeepOtherKeys() {
+        var settings = ProviderSettings()
+        settings.active = .custom
+        settings.customURL = " http://localhost:11434/v1 "
+        settings.custom.model = "qwen2.5vl"
+        settings.effort = .high
+        let json = settings.applied(to: ["hermes": ["url": "x"]])
+        XCTAssertNotNil(json["hermes"])
+        let back = ProviderSettings(json: json)
+        XCTAssertEqual(back.active, .custom)
+        XCTAssertEqual(back.customURL, "http://localhost:11434/v1")
+        XCTAssertEqual(back.custom, ModelChoice(model: "qwen2.5vl", effort: .high))
+    }
+
+    func testErrorsFromStatus() {
+        XCTAssertEqual(ProviderError.from(status: 429, body: "", retryAfter: "12"), .rateLimited(retryAfter: 12))
+        XCTAssertEqual(ProviderError.from(status: 529, body: ""), .overloaded)
+        XCTAssertEqual(ProviderError.from(status: 401, body: ""), .badKey)
+        XCTAssertEqual(ProviderError.from(status: 503, body: "{}"), .server(503))
+        XCTAssertEqual(ProviderError.from(status: 400, body: #"{"error":{"message":"bad image"}}"#), .badRequest("bad image"))
+        XCTAssertEqual(ProviderError.fromClaudeCode("Claude AI usage limit reached"), .rateLimited(retryAfter: nil))
+        XCTAssertEqual(ProviderError.fromClaudeCode("Invalid API key · Please run /login"), .signedOut)
+    }
+
+    func testClaudeEvents() {
+        XCTAssertEqual(ClaudeEvent.parse(["type": "content_block_delta", "delta": ["type": "text_delta", "text": "Hi"]]), .text("Hi"))
+        XCTAssertNil(ClaudeEvent.parse(["type": "content_block_delta", "delta": ["type": "thinking_delta", "thinking": "x"]]))
+        XCTAssertEqual(ClaudeEvent.parse(["type": "message_delta", "delta": ["stop_reason": "refusal"]]), .stop("refusal"))
+        XCTAssertEqual(ClaudeEvent.parse(["type": "error", "error": ["type": "overloaded_error"]]), .error(.overloaded))
+    }
+
+    func testAnthropicRequest() throws {
+        var transcript = Transcript()
+        transcript.add("What is this?", "A chart.")
+        let request = AnthropicConnection.request(question: "And this?", snapshot: snapshot, key: "k",
+                                                  choice: ModelChoice(model: "claude-haiku-5-5"), transcript: transcript)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "k")
+        let json = try body(request)
+        XCTAssertEqual(json["model"] as? String, "claude-haiku-5-5")
+        XCTAssertEqual((json["output_config"] as? [String: String])?["effort"], "medium")
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.count, 3)
+        XCTAssertEqual(messages[0]["content"] as? String, "What is this?")
+        XCTAssertTrue((json["system"] as? String ?? "").contains("You cannot click"))
+    }
+
+    func testOpenAIRequestSendsEffortOnlyWhenAsked() throws {
+        let url = URL(string: "http://localhost:11434/v1")!
+        let plain = OpenAICompatibleConnection.request(question: "Hi", snapshot: snapshot, baseURL: url, key: nil,
+                                                       choice: ModelChoice(model: "m", effort: .max), sendsEffort: false,
+                                                       transcript: Transcript())
+        XCTAssertEqual(plain.url?.absoluteString, "http://localhost:11434/v1/chat/completions")
+        XCTAssertNil(plain.value(forHTTPHeaderField: "Authorization"))
+        XCTAssertNil(try body(plain)["reasoning_effort"])
+
+        let withEffort = OpenAICompatibleConnection.request(question: "Hi", snapshot: snapshot, baseURL: url, key: "k",
+                                                            choice: ModelChoice(model: "m", effort: .max), sendsEffort: true,
+                                                            transcript: Transcript())
+        XCTAssertEqual(try body(withEffort)["reasoning_effort"] as? String, "high")
+    }
+
+    func testClaudeCodeRunsWithoutToolsAndResumes() throws {
+        let args = ClaudeCodeConnection.arguments(choice: ModelChoice(model: "haiku"), system: "S", resume: "abc")
+        XCTAssertEqual(args[args.firstIndex(of: "--tools")! + 1], "")
+        XCTAssertEqual(args[args.firstIndex(of: "--effort")! + 1], "medium")
+        XCTAssertEqual(Array(args.suffix(2)), ["--resume", "abc"])
+
+        let line = ClaudeCodeConnection.input(question: "Q", snapshot: snapshot)
+        XCTAssertEqual(line.last, 0x0A)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: line) as? [String: Any])
+        XCTAssertEqual(json["type"] as? String, "user")
+    }
+}

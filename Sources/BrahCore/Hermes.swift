@@ -65,6 +65,7 @@ public struct HermesSettings: Equatable, Sendable {
 /// returns a session id with the first answer, and later questions send it back.
 public actor HermesConnection: AgentConnection {
     public nonisolated let name = "Hermes"
+    public nonisolated var canAct: Bool { settings.isLocal }
     private let settings: HermesSettings
     private let session: URLSession
     private var sessionID: String?
@@ -80,16 +81,7 @@ public actor HermesConnection: AgentConnection {
 
     public func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply {
         let request = Self.request(question: question, snapshot: snapshot, settings: settings, sessionID: sessionID)
-        let (bytes, response) = try await session.bytes(for: request)
-        let http = response as? HTTPURLResponse
-        let status = http?.statusCode ?? 0
-
-        guard (200..<300).contains(status) else {
-            var body = Data()
-            for try await byte in bytes.prefix(2000) { body.append(byte) }
-            throw AgentError.http(status, String(decoding: body, as: UTF8.self))
-        }
-
+        let (bytes, http) = try await HTTP.stream(request, session: session)
         if let id = http?.value(forHTTPHeaderField: "X-Hermes-Session-Id"), !id.isEmpty {
             sessionID = id
         }
@@ -128,7 +120,7 @@ public actor HermesConnection: AgentConnection {
             "model": "hermes-agent",
             "stream": true,
             "messages": [
-                ["role": "system", "content": Brief.system(for: snapshot, canAct: settings.isLocal)],
+                ["role": "system", "content": Brief.system(for: snapshot, hands: settings.isLocal ? .acts : .remote)],
                 ["role": "user", "content": [
                     ["type": "text", "text": question],
                     ["type": "image_url", "image_url": ["url": image]],

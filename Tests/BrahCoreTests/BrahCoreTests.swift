@@ -531,13 +531,13 @@ final class BriefTests: XCTestCase {
                                     cursor: .zero, appName: nil, windowTitle: nil)
 
     func testLocalAgentMayActAfterAsking() {
-        let brief = Brief.system(for: snapshot, canAct: true)
+        let brief = Brief.system(for: snapshot, hands: .acts)
         XCTAssertTrue(brief.contains("ASK"))
         XCTAssertFalse(brief.contains("  "), "no runs of spaces from broken line joins")
     }
 
     func testRemoteAgentMustNotAct() {
-        let brief = Brief.system(for: snapshot, canAct: false)
+        let brief = Brief.system(for: snapshot, hands: .remote)
         XCTAssertTrue(brief.contains("do not use computer_use"))
         XCTAssertFalse(brief.contains("\nASK\n"))
     }

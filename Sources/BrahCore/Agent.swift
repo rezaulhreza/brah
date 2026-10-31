@@ -11,6 +11,8 @@ public enum AgentEvent: Equatable, Sendable {
 /// the same shape. The agent does any clicking itself. Brah only sees, talks and points.
 public protocol AgentConnection: Sendable {
     var name: String { get }
+    /// True when the agent can click and type on this Mac.
+    var canAct: Bool { get }
     /// `onEvent` gets each piece of the answer and each step as it arrives, so speech can start
     /// before the end and the user sees what the agent does.
     func ask(_ question: String, snapshot: Snapshot, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Reply
@@ -19,10 +21,11 @@ public protocol AgentConnection: Sendable {
 }
 
 public enum Brief {
+    public enum Hands { case acts, remote, none }
+
     /// The instructions every agent gets with a question. Short, because it rides on every turn.
-    /// `canAct` is false for an agent that is not on the user's Mac: its screen tools would act
-    /// on another computer.
-    public static func system(for snapshot: Snapshot, canAct: Bool = true) -> String {
+    /// `.remote` is an agent on another computer: its screen tools would act there.
+    public static func system(for snapshot: Snapshot, hands: Hands = .acts) -> String {
         let width = Int(snapshot.imageSize.width)
         let height = Int(snapshot.imageSize.height)
         let cx = Int(snapshot.cursor.x)
@@ -49,7 +52,7 @@ public enum Brief {
 
         \(guiding)
 
-        \(canAct ? acting : notActing)
+        \(hands == .acts ? acting : hands == .remote ? notActing : noHands)
         """
     }
 
@@ -84,6 +87,10 @@ public enum Brief {
         if you still need a yes.
         """
     }
+
+    static let noHands = """
+    You cannot click or type on this screen. Tell the user where to click instead, and point at it.
+    """
 
     static let notActing = """
     You run on another computer, not on the user's Mac, so do not use computer_use or browser \
