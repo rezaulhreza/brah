@@ -13,6 +13,8 @@ public enum Secrets {
     public static let accessClientSecret = "cf-access.client-secret"
     public static let anthropicKey = "anthropic.key"
     public static let customKey = "custom.key"
+    public static let deepgramKey = "deepgram.key"
+    public static let groqKey = "groq.key"
 
     public struct Failure: Error, CustomStringConvertible {
         public var status: OSStatus

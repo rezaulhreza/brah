@@ -225,6 +225,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Use the Hermes voice when the backend lets Brah in. Until then, and when it does not, the
     /// Mac speaks.
     private func connectVoice() {
+        voice.stop()
+        voice = Voice(hermes: nil)
         let hermes = HermesVoice(settings: HermesVoiceSettings.load())
         voiceReady = Task {
             do {

@@ -70,13 +70,12 @@ final class SettingsModel: ObservableObject {
 
     /// The Keychain accounts that the window shows.
     static let secretAccounts = [Secrets.hermesKey, Secrets.voicePassword, Secrets.accessClientID, Secrets.accessClientSecret,
-                                 Secrets.anthropicKey, Secrets.customKey]
+                                 Secrets.anthropicKey, Secrets.customKey, Secrets.deepgramKey, Secrets.groqKey]
 
     @Published var settings: EditableSettings
     @Published var providers: ProviderSettings
     @Published var responses: ResponseSettings
-    /// A Mac voice identifier. Empty: the best installed voice.
-    @Published var macVoice: String
+    @Published var speech: SpeechSettings
     private let preview = AVSpeechSynthesizer()
     /// Model ids from the provider, after a check.
     @Published var models: [String] = []
@@ -108,7 +107,7 @@ final class SettingsModel: ObservableObject {
         settings = EditableSettings(json: json)
         providers = ProviderSettings(json: json)
         responses = ResponseSettings(json: json)
-        macVoice = SpeechSettings.macVoice(json: json)
+        speech = SpeechSettings(json: json)
         savedSecrets = Dictionary(uniqueKeysWithValues: Self.secretAccounts.map { ($0, Secrets.get($0) ?? "") })
         secrets = savedSecrets
 
@@ -123,7 +122,7 @@ final class SettingsModel: ObservableObject {
         self.settings = settings
         providers = ProviderSettings(active: .claude)
         responses = ResponseSettings()
-        macVoice = ""
+        speech = SpeechSettings(provider: .deepgram, deepgramVoice: "aura-2-athena-en")
         self.secrets = secrets
         savedSecrets = secrets
         fileHasKey = false
@@ -239,7 +238,7 @@ final class SettingsModel: ObservableObject {
 
         do {
             let json = providers.applied(to: settings.applied(to: try ConfigFile.read()))
-            try ConfigFile.write(SpeechSettings.applied(macVoice, to: responses.applied(to: json)))
+            try ConfigFile.write(speech.applied(to: responses.applied(to: json)))
             for account in Self.secretAccounts where values[account, default: ""] != savedSecrets[account, default: ""] {
                 try Secrets.set(values[account, default: ""], for: account)
             }
@@ -253,7 +252,7 @@ final class SettingsModel: ObservableObject {
     func playVoice() {
         preview.stopSpeaking(at: .immediate)
         let utterance = AVSpeechUtterance(string: "Ho, brah. This is how I sound.")
-        utterance.voice = AVSpeechSynthesisVoice(identifier: macVoice) ?? Voice.bestMacVoice
+        utterance.voice = AVSpeechSynthesisVoice(identifier: speech.macVoice) ?? Voice.bestMacVoice
         preview.speak(utterance)
     }
 
@@ -451,8 +450,32 @@ struct SettingsView: View {
     @ViewBuilder
     private var voiceSection: some View {
         Section {
+            Picker("Speaks with", selection: $model.speech.provider) {
+                ForEach(SpeechProvider.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            switch model.speech.provider {
+            case .deepgram:
+                Picker("Voice", selection: $model.speech.deepgramVoice) {
+                    ForEach(SpeechSettings.deepgramVoices, id: \.id) { Text($0.about).tag($0.id) }
+                }
+                SecureField("API key", text: secret(Secrets.deepgramKey), prompt: Text("From your Hermes if empty"))
+            case .groq:
+                Picker("Voice", selection: $model.speech.groqVoice) {
+                    ForEach(SpeechSettings.groqVoices, id: \.self) { Text($0.capitalized).tag($0) }
+                }
+                SecureField("API key", text: secret(Secrets.groqKey), prompt: Text("gsk_…"))
+            case .auto, .mac:
+                EmptyView()
+            }
+        } header: {
+            Text("Voice")
+        } footer: {
+            note(speechNote)
+        }
+
+        Section {
             HStack {
-                Picker("Voice", selection: $model.macVoice) {
+                Picker("Mac voice", selection: $model.speech.macVoice) {
                     Text("Best installed").tag("")
                     ForEach(Voice.macVoices, id: \.identifier) { voice in
                         Text(voiceName(voice)).tag(voice.identifier)
@@ -460,10 +483,8 @@ struct SettingsView: View {
                 }
                 Button("Play") { model.playVoice() }
             }
-        } header: {
-            Text("Mac voice")
         } footer: {
-            note("Used when your Mac speaks. Add better voices in System Settings, Accessibility, Spoken Content.")
+            note("The Mac voice speaks when no other voice can. Add better voices in System Settings, Accessibility, Spoken Content.")
         }
 
         Section {
@@ -516,6 +537,15 @@ struct SettingsView: View {
                 }
             }
             .disabled(!model.settings.handsFree.enabled)
+        }
+    }
+
+    private var speechNote: String {
+        switch model.speech.provider {
+        case .auto: "Your Hermes voice when Hermes has one, else your Mac."
+        case .mac: "Free, private, and works offline."
+        case .deepgram: "Speaks while the answer arrives. With a key, Brah also listens with Deepgram."
+        case .groq: "Speaks a sentence at a time with your Groq key."
         }
     }
 

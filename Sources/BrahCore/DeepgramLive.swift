@@ -16,6 +16,11 @@ public struct DeepgramLiveSettings: Equatable, Sendable {
     static let listenURL = URL(string: "wss://api.deepgram.com/v2/listen")!
     public static let outputSampleRate = 24_000
 
+    /// For a Deepgram key of the user's own, with Deepgram's defaults.
+    public init(voice: String) {
+        self.init(status: ["available": true, "voice": voice])!
+    }
+
     /// From `GET /api/plugins/deepgram-live/status`. Nil when the plugin says it cannot work.
     public init?(status: [String: Any]) {
         guard status["available"] as? Bool == true, let voice = status["voice"] as? String, !voice.isEmpty else { return nil }

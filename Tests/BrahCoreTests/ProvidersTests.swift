@@ -131,3 +131,24 @@ final class ResponsesTests: XCTestCase {
         XCTAssertEqual(ResponseSettings(json: responses.applied(to: [:])), ResponseSettings(style: .detailed, instructions: "Call me Rez."))
     }
 }
+
+final class SpeechTests: XCTestCase {
+    func testSpeechSettingsRoundTrip() {
+        XCTAssertEqual(SpeechSettings(json: nil), SpeechSettings())
+        let settings = SpeechSettings(provider: .groq, macVoice: "x", deepgramVoice: "aura-2-pandora-en", groqVoice: "troy")
+        XCTAssertEqual(SpeechSettings(json: settings.applied(to: ["other": 1])), settings)
+        XCTAssertTrue(SpeechSettings.deepgramVoices.contains { $0.id == "aura-2-athena-en" })
+    }
+
+    func testGroqRequestAndPieces() throws {
+        let request = GroqSpeech.request("Hi.", voice: "troy", key: "k")
+        XCTAssertEqual(request.url?.absoluteString, "https://api.groq.com/openai/v1/audio/speech")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer k")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: String])
+        XCTAssertEqual(body["voice"], "troy")
+        XCTAssertEqual(body["model"], "canopylabs/orpheus-v1-english")
+
+        XCTAssertEqual(GroqSpeech.pieces("One. Two. Three.", limit: 9), ["One. Two.", "Three."])
+        XCTAssertEqual(GroqSpeech.pieces(""), [])
+    }
+}

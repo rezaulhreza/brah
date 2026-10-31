@@ -62,6 +62,9 @@ final class Voice {
     private let hermes: HermesVoice?
     /// The user's own live voice in Hermes, when the host has the `deepgram-live` plugin.
     private let deepgram: DeepgramLiveSettings?
+    private let speech: SpeechSettings
+    private let deepgramKey = Secrets.get(Secrets.deepgramKey)
+    private let groqKey = Secrets.get(Secrets.groqKey)
     private let system = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
     private var sampleRate = Double(DeepgramLiveSettings.outputSampleRate)
@@ -72,9 +75,13 @@ final class Voice {
     private var reply: LiveReply?
     var log: (String) -> Void = { _ in }
 
-    init(hermes: HermesVoice?, deepgram: DeepgramLiveSettings? = nil) {
+    init(hermes: HermesVoice?, deepgram: DeepgramLiveSettings? = nil, speech: SpeechSettings = .load()) {
         self.hermes = hermes
-        self.deepgram = hermes == nil ? nil : deepgram
+        self.speech = speech
+        var live = hermes == nil ? nil : deepgram
+        if live == nil, deepgramKey != nil { live = DeepgramLiveSettings(voice: speech.deepgramVoice) }
+        if speech.provider == .deepgram { live?.voice = speech.deepgramVoice }
+        self.deepgram = live
         AudioIO.shared.onDrained = { [weak self] in MainActor.assumeIsolated { self?.drained() } }
     }
 
@@ -92,9 +99,9 @@ final class Voice {
 
     /// Turns of a hands-free conversation, from Flux. Nil without the deepgram-live plugin.
     func turns(onTurn: @escaping @MainActor (TurnEvent) -> Void) async -> DeepgramListen? {
-        guard let hermes, let deepgram else { return nil }
+        guard let deepgram else { return nil }
         do {
-            let listen = DeepgramListen(socket: try await hermes.deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
+            let listen = DeepgramListen(socket: try await deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
             listen.onTurn = { event in DispatchQueue.main.async { MainActor.assumeIsolated { onTurn(event) } } }
             return listen
         } catch {
@@ -119,22 +126,47 @@ final class Voice {
         AudioIO.shared.release()
     }
 
+    /// The user's own Deepgram key first, else a short-lived token from the Hermes plugin.
+    private func deepgramSocket(_ url: URL) async throws -> URLSessionWebSocketTask {
+        if let deepgramKey {
+            let task = URLSession.shared.webSocketTask(with: url, protocols: ["token", deepgramKey])
+            task.resume()
+            return task
+        }
+        guard let hermes else { throw ProviderError.noKey("Deepgram") }
+        return try await hermes.deepgramSocket(url)
+    }
+
+    /// The voice starts while the answer still arrives.
+    private var speaksLive: Bool {
+        switch speech.provider {
+        case .auto: hermes != nil
+        case .deepgram: deepgram != nil
+        case .mac, .groq: false
+        }
+    }
+
     var route: String {
-        if let deepgram { return "Deepgram Live, \(deepgram.voice)" }
-        return hermes == nil ? "Mac voice" : "Hermes voice"
+        switch speech.provider {
+        case .mac: return "Mac voice"
+        case .groq: return groqKey == nil ? "Mac voice (no Groq key)" : "Groq, \(speech.groqVoice)"
+        case .deepgram where deepgram == nil: return "Mac voice (no Deepgram key)"
+        case .auto where hermes == nil: return "Mac voice"
+        default: return deepgram.map { "Deepgram Live, \($0.voice)" } ?? "Hermes voice"
+        }
     }
 
     // MARK: Listening
 
     /// Live words while the user talks, or nil when there is no live route.
     func listen(to recorder: Recorder, onPartial: @escaping @MainActor (String) -> Void) async -> WordStream? {
-        guard let hermes else { return nil }
+        guard deepgram != nil || hermes != nil else { return nil }
         do {
             let live: WordStream
             if let deepgram {
-                live = DeepgramListen(socket: try await hermes.deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
+                live = DeepgramListen(socket: try await deepgramSocket(deepgram.listenURL(sampleRate: Int(Recorder.sampleRate))))
             } else {
-                live = LiveTranscriber(socket: try await hermes.socket("api/audio/transcribe-stream"), sampleRate: Int(Recorder.sampleRate))
+                live = LiveTranscriber(socket: try await hermes!.socket("api/audio/transcribe-stream"), sampleRate: Int(Recorder.sampleRate))
             }
             live.onPartial = { text in DispatchQueue.main.async { MainActor.assumeIsolated { onPartial(text) } } }
             recorder.attach { [live] samples in live.send(samples) }
@@ -166,7 +198,7 @@ final class Voice {
     /// Start a spoken reply. Feed it pieces with `replyPiece` and close it with `endReply`.
     func beginReply() {
         stop()
-        guard let hermes else { return }
+        guard speaksLive else { return }
         let reply = LiveReply()
         self.reply = reply
         Task {
@@ -175,9 +207,9 @@ final class Voice {
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(event, of: reply) } }
                 }
                 let socket = if let deepgram {
-                    try await hermes.deepgramSocket(deepgram.speakURL())
+                    try await deepgramSocket(deepgram.speakURL())
                 } else {
-                    try await hermes.socket("api/audio/speak-stream")
+                    try await hermes!.socket("api/audio/speak-stream")
                 }
                 guard self.reply === reply else {
                     socket.cancel(with: .goingAway, reason: nil)
@@ -242,9 +274,9 @@ final class Voice {
 
     /// A whole text. The Hermes live stream first, because it sends raw PCM, which always plays.
     func say(_ text: String) {
-        guard hermes != nil else {
+        guard speaksLive else {
             stop()
-            sayWithMac(text)
+            sayWhole(text)
             return
         }
         beginReply()
@@ -257,7 +289,9 @@ final class Voice {
     private func sayWhole(_ text: String) {
         speaking?.cancel()
         speaking = Task {
-            if let hermes {
+            if speech.provider == .groq, let groqKey {
+                if await sayWithGroq(text, key: groqKey) { return }
+            } else if speech.provider != .mac, let hermes {
                 do {
                     let sound = try await hermes.speak(text)
                     guard !Task.isCancelled else { return }
@@ -278,10 +312,36 @@ final class Voice {
         }
     }
 
+    /// One piece at a time, the next one loading while this one plays. False when nothing played.
+    private func sayWithGroq(_ text: String, key: String) async -> Bool {
+        let voice = speech.groqVoice
+        let pieces = GroqSpeech.pieces(text)
+        echo.spoke(text)
+        var next: Task<Data, Error>? = pieces.first.map { first in Task { try await GroqSpeech.speak(first, voice: voice, key: key) } }
+        for index in pieces.indices {
+            do {
+                guard let sound = try await next?.value else { break }
+                next = index + 1 < pieces.count
+                    ? Task { [piece = pieces[index + 1]] in try await GroqSpeech.speak(piece, voice: voice, key: key) } : nil
+                let player = try AVAudioPlayer(data: sound)
+                self.player = player
+                if index == 0 { log("speaking with Groq, \(voice)") }
+                player.play()
+                while player.isPlaying { try await Task.sleep(for: .milliseconds(50)) }
+            } catch {
+                next?.cancel()
+                guard !Task.isCancelled else { return true }
+                log("Groq speech failed: \(error.localizedDescription)")
+                return index > 0
+            }
+        }
+        return true
+    }
+
     private func sayWithMac(_ text: String) {
         echo.spoke(text)
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(identifier: SpeechSettings.load()) ?? Self.bestMacVoice
+        utterance.voice = AVSpeechSynthesisVoice(identifier: speech.macVoice) ?? Self.bestMacVoice
         system.speak(utterance)
     }
 

@@ -204,21 +204,116 @@ public struct ResponseSettings: Equatable, Sendable {
     }
 }
 
-/// `{"speech": {"macVoice": "com.apple.voice.premium.en-GB.Malcolm"}}`. Empty: the best installed voice.
-public enum SpeechSettings {
-    public static func macVoice(json: [String: Any]?) -> String {
-        (json?["speech"] as? [String: Any])?["macVoice"] as? String ?? ""
+public enum SpeechProvider: String, CaseIterable, Sendable {
+    /// The Hermes voice when Hermes has one, else the Mac.
+    case auto, mac, deepgram, groq
+
+    public var title: String {
+        switch self {
+        case .auto: "Hermes voice, else Mac"
+        case .mac: "Mac"
+        case .deepgram: "Deepgram Aura"
+        case .groq: "Groq Orpheus"
+        }
+    }
+}
+
+/// Who speaks, and with which voice:
+/// `{"speech": {"provider": "deepgram", "deepgramVoice": "aura-2-athena-en", "groqVoice": "troy", "macVoice": ""}}`.
+/// The Deepgram and Groq keys live in the Keychain. An empty Mac voice is the best one installed.
+public struct SpeechSettings: Equatable, Sendable {
+    public var provider: SpeechProvider
+    public var macVoice: String
+    public var deepgramVoice: String
+    public var groqVoice: String
+
+    public static let deepgramVoices: [(id: String, about: String)] = [
+        ("thalia", "clear, confident"), ("athena", "calm, professional"), ("pandora", "calm, British"),
+        ("draco", "warm baritone, British"), ("asteria", "clear, energetic"), ("luna", "friendly, natural"),
+        ("helena", "caring, raspy"), ("harmonia", "empathetic, calm"), ("iris", "cheerful"), ("juno", "melodic, breathy"),
+        ("vesta", "patient, empathetic"), ("theia", "sincere, Australian"), ("hyperion", "warm, Australian"),
+        ("apollo", "confident, casual"), ("arcas", "smooth, clear"), ("aries", "warm, energetic"), ("atlas", "friendly"),
+        ("hermes", "expressive"), ("jupiter", "knowledgeable baritone"), ("mars", "patient baritone"),
+        ("neptune", "polite, professional"), ("odysseus", "calm, smooth"), ("orion", "calm, polite"),
+        ("orpheus", "clear, trustworthy"), ("pluto", "calm baritone"), ("saturn", "confident baritone"), ("zeus", "deep, smooth"),
+    ].map { ("aura-2-\($0.0)-en", "\($0.0.capitalized), \($0.1)") }
+    public static let groqVoices = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
+
+    public init(provider: SpeechProvider = .auto, macVoice: String = "", deepgramVoice: String = "aura-2-thalia-en",
+                groqVoice: String = "hannah") {
+        self.provider = provider
+        self.macVoice = macVoice
+        self.deepgramVoice = deepgramVoice
+        self.groqVoice = groqVoice
     }
 
-    public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
-        macVoice(json: Config.json(home: home))
+    public init(json: [String: Any]?) {
+        let section = json?["speech"] as? [String: Any]
+        let defaults = SpeechSettings()
+        func text(_ key: String, _ fallback: String) -> String {
+            (section?[key] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? fallback
+        }
+        self.init(provider: (section?["provider"] as? String).flatMap(SpeechProvider.init(rawValue:)) ?? .auto,
+                  macVoice: section?["macVoice"] as? String ?? "",
+                  deepgramVoice: text("deepgramVoice", defaults.deepgramVoice),
+                  groqVoice: text("groqVoice", defaults.groqVoice))
     }
 
-    public static func applied(_ identifier: String, to json: [String: Any]) -> [String: Any] {
+    public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> SpeechSettings {
+        SpeechSettings(json: Config.json(home: home))
+    }
+
+    public func applied(to json: [String: Any]) -> [String: Any] {
         var json = json
         var section = json["speech"] as? [String: Any] ?? [:]
-        section["macVoice"] = identifier
+        section["provider"] = provider.rawValue
+        section["macVoice"] = macVoice
+        section["deepgramVoice"] = deepgramVoice
+        section["groqVoice"] = groqVoice
         json["speech"] = section
         return json
+    }
+}
+
+/// Groq's Orpheus voices. The answer goes in sentence-sized pieces, so speech starts early.
+public enum GroqSpeech {
+    public static func request(_ text: String, voice: String, key: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/audio/speech")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = ["model": "canopylabs/orpheus-v1-english", "voice": voice, "input": text, "response_format": "wav"]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
+    public static func speak(_ text: String, voice: String, key: String, session: URLSession = .shared) async throws -> Data {
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request(text, voice: voice, key: key))
+        } catch let error as URLError where error.code != .cancelled {
+            throw ProviderError.offline
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw ProviderError.from(status: status, body: String(decoding: data, as: UTF8.self)) }
+        return data
+    }
+
+    /// Sentences, joined up to about 180 characters.
+    public static func pieces(_ text: String, limit: Int = 180) -> [String] {
+        var sentences: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sentence, _, _, _ in
+            if let sentence = sentence?.trimmingCharacters(in: .whitespacesAndNewlines), !sentence.isEmpty { sentences.append(sentence) }
+        }
+        var pieces: [String] = []
+        for sentence in sentences {
+            if let last = pieces.last, last.count + sentence.count + 1 <= limit {
+                pieces[pieces.count - 1] = last + " " + sentence
+            } else {
+                pieces.append(sentence)
+            }
+        }
+        return pieces
     }
 }
