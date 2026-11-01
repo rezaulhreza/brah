@@ -92,6 +92,11 @@ Accessibility > Brah.
 To try it, open `demo/benchmark.html` in a browser. It is a made-up app with charts, forms,
 multi-step flows and a scored list of tasks, from "read a value" to "finish a four-step wizard".
 
+There are two more made-up apps, for a real-life job: editing a video. `demo/cutline.html` looks
+like Premiere Pro and `demo/grade-studio.html` looks like DaVinci Resolve. Neither uses a real
+name or logo. Open one in a browser and click **Watch Brah do it**. Brah cuts a shaky part out,
+adds a title, lowers the music, warms the colour, and exports. It asks before it publishes.
+
 ### Hermes
 
 Brah keeps the agent's hands off your screen until you say yes.
