@@ -83,12 +83,22 @@ your own plan, an Anthropic API key, or any OpenAI-compatible server, Ollama inc
 
 ## Screen actions
 
-### Claude (subscription or API key)
+Brah can click and type for you, after you ask. Not every AI gets hands:
 
-Brah has its own hands: `screenshot`, `click`, `type`, `key` and `scroll`. Claude Code gets them
-through a small MCP server that Brah runs on `127.0.0.1`, with a new token on each run. The
-Anthropic API route uses the same tools in its own loop. Brah's yellow cursor flies to each
-click first, so you can see what happens.
+| Provider | Clicks and types |
+|---|---|
+| Claude subscription | Yes, through Brah's screen tools. |
+| ChatGPT subscription | Yes, through Brah's screen tools. |
+| Anthropic API | Yes, through Brah's screen tools. |
+| Hermes | Yes, with its own `computer_use` tool. See below. |
+| OpenAI-compatible | No. It tells you where to click and points at it. |
+
+### Brah's screen tools
+
+Brah has its own hands: `screenshot`, `click`, `type`, `key` and `scroll`. There is no drag.
+Claude Code gets the tools through a small MCP server that Brah runs on `127.0.0.1`, with a new
+token on each run. The ChatGPT and Anthropic API routes call the same tools in their own loop.
+Brah's yellow cursor flies to each click first, so you can see what happens.
 
 Brah acts in auto mode: it does the task, and asks first only before a risky action, such as
 send, pay, delete, publish, submit or sign in. Answer with **Allow**, **Always allow** or **Not
@@ -97,13 +107,19 @@ now**, or say yes or no. Stop cancels the rest of the task.
 Clicks and typing need the Accessibility permission: System Settings > Privacy & Security >
 Accessibility > Brah.
 
-To try it, open `demo/benchmark.html` in a browser. It is a made-up app with charts, forms,
-multi-step flows and a scored list of tasks, from "read a value" to "finish a four-step wizard".
+### Try it
 
-There are two more made-up apps, for a real-life job: editing a video. `demo/cutline.html` looks
-like Premiere Pro and `demo/grade-studio.html` looks like DaVinci Resolve. Neither uses a real
-name or logo. Open one in a browser and click **Watch Brah do it**. Brah cuts a shaky part out,
-adds a title, lowers the music, warms the colour, and exports. It asks before it publishes.
+Open one of these made-up apps in a browser and click **Watch Brah do it**. Brah runs a
+six-step tour with your own AI. It only starts a tour when the top window is one of these pages.
+
+| Page | What it is | The tour |
+|---|---|---|
+| `demo/benchmark.html` | A sales dashboard with charts, forms and multi-step flows. | Read a value, open tabs, change the date range, launch a campaign, send an invoice. |
+| `demo/grade-studio.html` | A video editor that looks like Resolve. | Cut out a shaky part, add a title, lower the music, warm the colour, render and publish. |
+| `demo/cutline.html` | A video editor that looks like Premiere Pro. | The same job, in a different layout. |
+
+The editors use no real name or logo. The benchmark page also has a scored list of tasks, from
+"read a value" to "finish a four-step wizard".
 
 ### Hermes
 
