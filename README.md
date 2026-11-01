@@ -17,7 +17,9 @@ opens tabs, changes the date range, starts a campaign, then finds an order and s
 before it sends the invoice. The recording has no sound. In real use, Brah says each step out
 loud as it goes. [Watch it at full speed (2.5 minutes)](docs/demo.mp4).
 
-Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer.
+Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer. Text to
+speech voices cannot say *bruh* the right way either, and an assistant that talks should be able
+to say its own name.
 
 **Bruh** is the face you make when the Export button was right there all along.
 **Brah** is the mate who points at it.
