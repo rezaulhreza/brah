@@ -10,12 +10,29 @@ its own cursor. Ask it to do the thing, and it clicks and types for you. After y
 before. Works with Claude, ChatGPT, Ollama and Hermes. Native app for macOS 14 or later, free for
 personal use.
 
+[![Brah's promo film: ask about anything on your screen, and Brah answers and points](docs/promo.gif)](https://github.com/rezaulhreza/brah/blob/main/docs/promo.mp4)
+
+**[Watch the promo with sound (MP4, 57 seconds)](https://github.com/rezaulhreza/brah/blob/main/docs/promo.mp4).** The picture above is
+silent. The film has music and sound effects.
+
+## Brah at work
+
 ![Brah works through six tasks on a test dashboard and asks before it sends an invoice](docs/demo.gif)
 
 Six tasks on the [benchmark page](demo/benchmark.html), at 2x speed. Brah reads the dashboard,
 opens tabs, changes the date range, starts a campaign, then finds an order and stops to ask
 before it sends the invoice. The recording has no sound. In real use, Brah says each step out
 loud as it goes. [Download it at full speed (MP4, 2.5 minutes)](https://github.com/rezaulhreza/brah/raw/main/docs/demo.mp4).
+
+The same kind of job in a video editor, at 2x speed. Grade Studio is a made-up app that looks like
+a Resolve-style editor. Brah works with the ChatGPT subscription here. It adds a title, lowers
+the music in the mixer, warms the colour on the Color page, then renders for YouTube and
+publishes. [Download it at full speed (MP4, 2.8 minutes)](https://github.com/rezaulhreza/brah/raw/main/docs/demo-grade-studio.mp4).
+
+![Brah in a Resolve-style editor: it adds a title, sets the music, warms the colour and renders](docs/demo-grade-studio.gif)
+
+Try it yourself: open [`demo/grade-studio.html`](demo/grade-studio.html) (Resolve-style) or
+[`demo/cutline.html`](demo/cutline.html) (Premiere-style) in a browser.
 
 Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer. Text to
 speech voices cannot say *bruh* the right way either, and an assistant that talks should be able
