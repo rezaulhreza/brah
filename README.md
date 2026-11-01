@@ -54,21 +54,6 @@ your own plan, an Anthropic API key, or any OpenAI-compatible server, Ollama inc
 
 ![Brah answers out loud and points at the Export button](docs/screenshots/answer.png)
 
-## In pictures
-
-Fake app, fake bills, fake people. Real Brah.
-
-| | |
-|---|---|
-| ![Listening while the hotkey is held](docs/screenshots/listening.png) | ![A typed question](docs/screenshots/typing.png) |
-| **Listening.** Hold the key and ask like you would ask a mate. Your words show as you talk. | **Typing.** Tap the key instead. For libraries and open-plan offices. |
-| ![The agent at work](docs/screenshots/thinking.png) | ![The agent asks before it acts](docs/screenshots/approval.png) |
-| **Working.** Every step shows, so you know what it is up to. | **Asking first.** Nothing gets clicked until you say so. Brah has manners. |
-| ![A hands-free conversation](docs/screenshots/handsfree.png) | ![The Settings window](docs/screenshots/settings.png) |
-| **Hands-free.** "Hey Brah", then just talk. "Bye" when you are done. | **Settings.** Your agent, your voice, your keys. Secrets go in the Keychain. |
-| ![Brah's cursor shows the next click](docs/screenshots/guide.png) | ![Happy eyes when the job is done](docs/screenshots/done.png) |
-| **Show me.** Brah's own cursor flies to the next click and waits. Click it, and Brah finds the next one. Or hit **Do it for me**. | **Done.** Happy eyes. Keep Brah waiting too long and you get the side-eye. |
-
 ## What it does
 
 - **Sees what you see.** Each question takes a screenshot of the screen under your cursor, with
