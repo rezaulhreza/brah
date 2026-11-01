@@ -215,6 +215,7 @@ select.in{padding-right:4px}
     <span class="app-title" id="app-title">Brah demo · Cutline Pro</span>
     <span class="app-doc">Lisbon_vlog.cutproj</span>
     <div class="spacer"></div>
+    <button class="btn" data-action="export" title="Export Media (Cmd+M)">Export Media…</button>
     <a class="btn primary" id="watch-brah" href="brah://tour" aria-describedby="watch-brah-note">Watch Brah do it</a>
     <span class="brah-state" id="brah-state" aria-live="polite"></span>
     <span class="sr-only" id="watch-brah-note">Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.</span>
@@ -996,7 +997,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Home') { run('go-start'); return; }
   if (e.key === 'End') { run('go-end'); return; }
 });
-document.addEventListener('focusin', e => { if (e.target.id === 'title-text' || e.target.id === 'title-size') setTimeout(() => e.target.select && e.target.select(), 0); });
+// Select the whole value when a number box gets focus, so typed text replaces it.
+document.addEventListener('focusin', e => {
+  const t = e.target;
+  if (t.id === 'title-text' || t.id === 'title-size' || t.id === 'tc-input' || (t.classList && t.classList.contains('num'))) {
+    setTimeout(() => t.select && t.select(), 0);
+    justFocused = t;
+  }
+});
+// Some browsers drop the selection on the mouse-up of the click that focused the box.
+let justFocused = null;
+document.addEventListener('mouseup', e => { if (justFocused && e.target === justFocused) e.preventDefault(); justFocused = null; }, true);
 $('#m-title').addEventListener('mousedown', e => { if (e.target.id === 'm-title') hideModal('m-title'); });
 document.addEventListener('mouseover', e => {
   if (!openMenu) return; const mb = e.target.closest('[data-menu]');
