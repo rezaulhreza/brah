@@ -1,0 +1,1304 @@
+<!--
+  Grade Studio: a fake video editor for manual tests of a screen-reading, clicking and typing assistant. All names and footage are fictional. Not affiliated with any real product.
+-->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Brah demo · Grade Studio</title>
+<style>
+:root{
+  --bg:#141416; --panel:#1c1c1e; --panel2:#252528; --panel3:#2e2e32; --line:#343439; --line2:#4a4a52;
+  --text:#ececee; --muted:#a8a8b2; --dim:#85858f;
+  --accent:#f0a23b; --accent-weak:#3b2d16; --blue:#3b7cf0; --blue-hover:#2f68cf; --red:#e5483c; --ok:#4cc38a;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-size:13px;line-height:1.35;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+h2,h3,h4{margin:0}
+.muted{color:var(--muted)} .spacer{flex:1} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Shell */
+.app{display:grid;grid-template-rows:40px minmax(0,1fr) 54px;height:100vh;min-width:1100px}
+.topbar{display:flex;align-items:center;gap:8px;padding:0 10px;background:#101012;border-bottom:1px solid var(--line);min-width:0}
+.logo{display:flex;align-items:center;gap:8px;font-weight:650;flex:none;padding-right:6px}
+.logo i{width:20px;height:20px;border-radius:5px;background:conic-gradient(from 200deg,#f0a23b,#c25a2a,#6b4fd8,#f0a23b);display:block}
+.menus{display:flex;gap:0;overflow:hidden;min-width:0;flex:0 1 auto}
+.menus button{height:28px;padding:0 8px;border:0;background:none;color:var(--muted);border-radius:4px;white-space:nowrap}
+.menus button:hover{background:var(--panel3);color:var(--text)}
+.proj{flex:none;font-weight:600;padding:0 8px}
+.proj span{color:var(--muted);font-weight:400;margin-left:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 10px;border-radius:4px;border:1px solid var(--line2);background:var(--panel3);color:var(--text);font-size:12px;white-space:nowrap;text-decoration:none}
+.btn:hover{background:#3a3a40}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.btn.primary:hover{background:var(--blue-hover)}
+.btn.primary:disabled:hover{background:var(--blue)}
+.btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-weak)}
+.btn.running{background:#24242a;border-color:var(--line2)}
+.btn svg{flex:none}
+.brah-state{font-size:12px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace{position:relative;min-height:0;background:var(--bg)}
+.page{position:absolute;inset:0;display:grid;gap:3px;padding:3px;min-height:0;min-width:0}
+.pagebar{display:flex;align-items:center;background:#101012;border-top:1px solid var(--line);padding:0 10px;gap:6px}
+.pb-side{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.pb-side.right{justify-content:flex-end}
+.pb-name{line-height:1.2}
+.pb-name b{display:block;font-size:12px}
+.pb-name span{font-size:12px;color:var(--muted)}
+.pages{display:flex;gap:4px}
+.pagebtn{width:92px;height:46px;border:0;border-radius:6px;background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;border-top:2px solid transparent}
+.pagebtn:hover{background:var(--panel2);color:var(--text)}
+.pagebtn[aria-current=page]{background:var(--panel2);color:var(--accent);border-top-color:var(--accent);font-weight:600}
+.iconbtn{width:34px;height:34px;border:0;border-radius:6px;background:none;color:var(--muted);display:grid;place-items:center}
+.iconbtn:hover{background:var(--panel2);color:var(--text)}
+
+/* Panels */
+.panel{background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.panel-h{height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);background:#202023}
+.panel-h .ptitle{color:var(--text);font-weight:600}
+.panel-b{flex:1;min-height:0;overflow:auto;padding:8px}
+.tabs button{height:32px;padding:0 10px;border:0;background:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-size:12px}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+.panel-h.tabs{padding:0 4px}
+
+/* Fields */
+.fld{height:28px;min-width:0;width:84px;background:#101012;border:1px solid var(--line2);border-radius:3px;color:var(--text);padding:0 8px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right}
+.fld:focus{border-color:var(--accent);outline:none}
+.fld:disabled{opacity:.4}
+.fld.text{text-align:left;font-family:inherit;width:100%}
+.unit{color:var(--muted);font-size:12px}
+.rowf{display:grid;grid-template-columns:96px auto auto;align-items:center;gap:8px;margin:0 0 8px}
+.rowf label{color:var(--muted);font-size:12px}
+h4.sec{font-size:12px;font-weight:600;color:var(--text);margin:4px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+
+/* Media pool */
+.pool{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pool.wide{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px;text-align:left;color:var(--text);display:flex;flex-direction:column;gap:4px;min-width:0}
+.tile:hover{border-color:var(--line2)}
+.tile[aria-pressed=true]{border-color:var(--accent)}
+.tile .thumb{width:100%;aspect-ratio:16/9;border-radius:2px;display:block;background:#000;object-fit:cover}
+.tile .tname{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .tmeta{font-size:12px;color:var(--muted)}
+.fxlist{list-style:none;margin:0;padding:0}
+.fxlist li{margin:0}
+.fxhead{display:flex;align-items:center;gap:6px;height:28px;padding:0 6px;color:var(--text);font-weight:600;font-size:12px}
+.fxitem{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 6px 0 26px;border:0;background:none;color:var(--muted);font-size:12px;text-align:left;border-radius:3px}
+.fxitem:hover{background:var(--panel3);color:var(--text)}
+.fxitem b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:3px;background:var(--panel3);color:var(--text);font-size:11px}
+
+/* Viewer */
+.vfit{position:relative;flex:1;min-height:0;background:#0a0a0b;overflow:hidden}
+.vfit canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000;box-shadow:0 0 0 1px #000}
+.transport{display:flex;align-items:center;gap:6px;padding:6px 8px;border-top:1px solid var(--line);flex:none;flex-wrap:nowrap;background:#202023}
+.transport .btn{padding:0 8px}
+.tcread{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.tcread b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:600;letter-spacing:.02em}
+
+@media (max-width:1400px){.transport .dur{display:none}}
+/* Edit layout */
+#page-edit{grid-template-rows:minmax(0,1fr) 296px}
+.edit-top{display:grid;grid-template-columns:320px minmax(0,1fr) 290px;gap:3px;min-height:0}
+.insp-note{font-size:12px;color:var(--muted);margin:0 0 10px}
+.insp-t{font-size:12px;color:var(--text);max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Timeline */
+.tl-panel{display:flex;flex-direction:column;min-height:0}
+.tl-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);background:#202023;flex:none;flex-wrap:nowrap;min-width:0;overflow:hidden}
+.tl-bar .sep{width:1px;height:20px;background:var(--line2);margin:0 4px}
+.tl-bar label{color:var(--muted);font-size:12px}
+.tl-bar .fld{width:112px;text-align:center;font-size:13px;font-weight:600}
+.tl-sel{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tl-sel b{color:var(--text);font-weight:600}
+.tl{display:grid;grid-template-columns:76px minmax(0,1fr);flex:1;min-height:0;background:#161618}
+.tl-heads{border-right:1px solid var(--line);background:#1c1c1e;overflow:hidden}
+.tl-corner{height:26px;border-bottom:1px solid var(--line)}
+.tl-head{display:flex;flex-direction:column;justify-content:center;padding:0 8px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.2}
+.tl-head b{font-size:13px}
+.tl-head span{color:var(--muted);font-size:12px}
+.tl-scroll{overflow-x:auto;overflow-y:hidden;position:relative}
+.tl-inner{position:relative;min-width:100%}
+.ruler{height:26px;position:relative;border-bottom:1px solid var(--line);background:#1f1f22;cursor:pointer}
+.ruler i{position:absolute;bottom:0;width:1px;height:6px;background:#5a5a62}
+.ruler i.maj{height:11px;background:#8a8a94}
+.ruler span{position:absolute;top:2px;font-size:12px;color:var(--muted);transform:translateX(3px);pointer-events:none;font-variant-numeric:tabular-nums}
+.lane{position:relative;border-bottom:1px solid var(--line);background:repeating-linear-gradient(90deg,transparent 0,transparent 74px,rgba(255,255,255,.035) 74px,rgba(255,255,255,.035) 75px)}
+.clip{position:absolute;top:2px;bottom:2px;border-radius:3px;border:1px solid rgba(0,0,0,.55);overflow:hidden;cursor:pointer;font-size:12px;line-height:1.2;padding:3px 6px;color:#fff;user-select:none;background-color:#3c5d8c}
+.clip .cname{display:block;width:fit-content;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:1;font-weight:600;background:rgba(0,0,0,.62);border-radius:2px;padding:0 4px}
+.clip .csub{display:block;width:fit-content;white-space:nowrap;overflow:hidden;position:relative;z-index:1;color:#ddd;background:rgba(0,0,0,.5);border-radius:2px;padding:0 4px;margin-top:2px}
+.clip.t-V1{background-color:#355a8a;background-repeat:repeat-x;background-size:auto 100%;background-position:left center;box-shadow:inset 0 0 0 100px rgba(10,20,40,.35)}
+.clip.t-V2{background-color:#6b4fd8;border-color:#2a1d6b}
+.clip.t-A1{background-color:#2c6b57}
+.clip.t-A2{background-color:#8a5a2c}
+.clip.sel{outline:2px solid var(--accent);outline-offset:-2px;z-index:2;filter:brightness(1.18)}
+.clip .wave{position:absolute;left:0;right:0;bottom:0;top:0;width:100%;height:100%;opacity:.45}
+.clip .wave path{stroke:#d9fff0;stroke-width:1.6;fill:none}
+.clip.t-A2 .wave path{stroke:#ffe3bd}
+.tl.bladeon .clip{cursor:crosshair}
+.playhead{position:absolute;top:0;bottom:0;width:0;border-left:1px solid var(--red);pointer-events:none;z-index:5}
+.playhead::before{content:"";position:absolute;top:0;left:-7px;width:13px;height:13px;background:var(--red);clip-path:polygon(0 0,100% 0,100% 55%,50% 100%,0 55%)}
+.gap-hint{position:absolute;inset:0;pointer-events:none}
+
+/* Fairlight */
+#page-fair{grid-template-rows:230px minmax(0,1fr)}
+.mixer{display:flex;gap:8px;padding:10px;height:100%;min-height:0;overflow:auto}
+.strip{width:176px;flex:none;background:var(--panel2);border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;padding:8px;gap:8px;min-height:0}
+.strip.main{width:200px;background:#2a2a2e}
+.strip h3{font-size:13px;display:flex;justify-content:space-between;align-items:baseline}
+.strip h3 span{font-size:12px;color:var(--muted);font-weight:400}
+.fader-area{flex:1;min-height:150px;display:flex;gap:8px;justify-content:center}
+.scale{position:relative;width:28px;font-size:12px;color:var(--muted);text-align:right}
+.scale span{position:absolute;right:0;transform:translateY(50%)}
+.fader{position:relative;width:46px;cursor:pointer}
+.fader::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;background:#0c0c0e;border-radius:2px;border:1px solid var(--line2)}
+.fader .knob{position:absolute;left:3px;right:3px;height:22px;margin-bottom:-11px;background:linear-gradient(#8d8d96,#5d5d66);border:1px solid #aaa;border-radius:3px;display:grid;place-items:center}
+.fader .knob::after{content:"";width:70%;height:2px;background:#111}
+.meter{display:flex;gap:3px;width:22px}
+.mbar{position:relative;flex:1;background:linear-gradient(to top,#2fbf6b 0,#2fbf6b 66%,#e5c13a 66%,#e5c13a 84%,#e5483c 84%);border-radius:1px}
+.mbar i{position:absolute;left:0;right:0;top:0;background:#0b0b0d;height:100%}
+.db-row{display:flex;align-items:center;gap:6px;justify-content:center}
+.ms-row{display:flex;gap:6px}
+.ms-row .btn{flex:1;padding:0}
+.btn.mute.on{background:#7a2d27;border-color:var(--red);color:#fff}
+.btn.solo.on{background:#6d5412;border-color:#e5c13a;color:#fff}
+.bus-note{font-size:12px;color:var(--muted)}
+
+/* Color */
+#page-color{grid-template-rows:minmax(0,1fr) 300px}
+.color-top{display:grid;grid-template-columns:270px minmax(0,1fr) 270px;gap:3px;min-height:0}
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.still{background:var(--panel2);border:2px solid var(--line);border-radius:4px;padding:3px;color:var(--text);text-align:left;display:flex;flex-direction:column;gap:3px}
+.still:hover{border-color:var(--line2)}
+.still[aria-pressed=true]{border-color:var(--accent)}
+.still canvas{width:100%;height:auto;aspect-ratio:16/9;display:block;border-radius:2px}
+.still span{font-size:12px;padding:0 2px 2px}
+.node-svg{width:100%;height:auto;display:block}
+.node-svg text{fill:#ececee;font-size:12px;font-family:inherit}
+.prim{display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;padding:10px 16px;align-items:start;overflow:auto;min-height:0}
+.wheels{display:flex;gap:18px}
+.wbox{display:flex;flex-direction:column;align-items:center;gap:4px}
+.wbox .wt{font-weight:600;font-size:13px}
+.wheel{--w:clamp(104px,17vh,150px);position:relative;width:var(--w);height:var(--w);border-radius:50%;cursor:crosshair;background:radial-gradient(circle,rgba(128,128,128,1) 0,rgba(128,128,128,0) 70%),conic-gradient(from 30deg,#ffe53b,#ff3b30,#ff3bd0,#3b4bff,#3bf0ff,#3bff6a,#ffe53b);border:2px solid #0c0c0e;box-shadow:0 0 0 1px var(--line2)}
+.wheel .dot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:2px solid #111;pointer-events:none}
+.wheel .cross{position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0003,#0003) center/1px 100% no-repeat,linear-gradient(#0003,#0003) center/100% 1px no-repeat}
+.wbox .wv{font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+.pf{display:grid;grid-template-columns:repeat(3,minmax(0,150px));gap:10px 18px}
+.pf div{display:flex;flex-direction:column;gap:4px}
+.pf label{font-size:12px;color:var(--muted)}
+.pf .fld{width:100%}
+.look-line{font-size:12px;color:var(--muted)}
+.look-line b{color:var(--accent)}
+
+/* Deliver */
+#page-deliver{grid-template-columns:430px minmax(0,1fr)}
+.presets{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.preset{display:flex;align-items:center;justify-content:space-between;gap:8px;height:34px;padding:0 10px;border:1px solid var(--line);background:var(--panel2);border-radius:4px;text-align:left;color:var(--text)}
+.preset:hover{border-color:var(--line2)}
+.preset[aria-pressed=true]{border-color:var(--accent);background:var(--accent-weak);font-weight:600}
+.preset small{color:var(--muted);font-size:12px;font-weight:400}
+.dl{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;align-items:center;margin:0 0 14px}
+.dl dt{color:var(--muted);font-size:12px}
+.dl dd{margin:0;font-size:13px}
+.job{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:10px 12px;margin-bottom:8px}
+.job-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.job small{color:var(--muted);font-size:12px}
+.bar{height:8px;background:#0e0e10;border-radius:4px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--blue);width:0}
+.job.done .bar i{background:var(--ok)}
+.q-actions{display:flex;gap:8px;align-items:center;padding:10px;border-top:1px solid var(--line);flex:none;background:#202023}
+.q-status{font-size:13px;font-weight:600}
+.q-empty{color:var(--muted);padding:24px 8px;text-align:center;border:1px dashed var(--line2);border-radius:4px}
+
+/* Cut */
+#page-cut{grid-template-rows:minmax(0,1fr) 62px 200px}
+.cut-top{display:grid;grid-template-columns:1fr 1fr;gap:3px;min-height:0}
+.overview{position:relative;height:100%;margin:8px;background:#121214;border:1px solid var(--line);border-radius:3px;cursor:pointer}
+.overview i{position:absolute;top:6px;bottom:6px;border-radius:2px;background:#355a8a;border:1px solid #000}
+.overview .oph{position:absolute;top:0;bottom:0;width:0;border-left:1px solid var(--red)}
+
+/* Media page */
+#page-media{grid-template-columns:200px minmax(0,1fr) 300px}
+.bins{list-style:none;margin:0;padding:0}
+.bins li{padding:6px 8px;border-radius:3px;font-size:12px;color:var(--muted)}
+.bins li.cur{background:var(--panel3);color:var(--text)}
+.md{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;font-size:12px;margin:0}
+.md dt{color:var(--muted)} .md dd{margin:0;word-break:break-all}
+
+/* Toasts and dialog */
+.toasts{position:fixed;right:14px;bottom:64px;display:flex;flex-direction:column;gap:6px;z-index:300;align-items:flex-end;pointer-events:none}
+.toast{background:#2b2b30;border:1px solid var(--line2);border-left:3px solid var(--accent);color:var(--text);padding:9px 14px;border-radius:4px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.5);max-width:380px;animation:tin .15s ease-out}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:200}
+.dialog{width:400px;background:#242427;border:1px solid var(--line2);border-radius:6px;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+.dialog h2{font-size:15px;margin-bottom:6px}
+.dialog p{margin:0 0 12px;color:var(--muted);font-size:12px}
+.dialog label{display:block;margin-bottom:6px;font-size:12px;color:var(--muted)}
+.dialog .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="logo"><i aria-hidden="true"></i>Grade Studio</div>
+    <nav class="menus" aria-label="Menu bar" id="menus"></nav>
+    <div class="spacer"></div>
+    <div class="proj">Lisbon in 3 days<span>Edited</span></div>
+    <div class="spacer"></div>
+    <a class="btn primary" id="watch-brah" href="brah://tour" aria-describedby="watch-brah-note">Watch Brah do it</a>
+    <span class="brah-state muted" id="brah-state" aria-live="polite"></span>
+    <span class="sr-only" id="watch-brah-note">Needs Brah running on this Mac. Brah runs a hands-free tour with your own AI.</span>
+  </header>
+
+  <main class="workspace" id="workspace">
+
+    <!-- MEDIA -->
+    <section class="page" id="page-media" data-page="media" hidden>
+      <section class="panel" aria-label="Bins">
+        <div class="panel-h"><span class="ptitle">Bins</span></div>
+        <div class="panel-b"><ul class="bins"><li>Master</li><li class="cur">Lisbon footage</li><li>Audio</li><li>Stills</li></ul></div>
+      </section>
+      <section class="panel" aria-label="Media Pool">
+        <div class="panel-h"><span class="ptitle">Media Pool</span><span class="muted">Lisbon footage</span><span class="spacer"></span><button class="btn primary" data-action="import">Import Media</button></div>
+        <div class="panel-b"><div class="pool wide" data-slot="pool-media"></div></div>
+      </section>
+      <section class="panel" aria-label="Metadata">
+        <div class="panel-h"><span class="ptitle">Metadata</span></div>
+        <div class="panel-b"><dl class="md" id="md"></dl></div>
+      </section>
+    </section>
+
+    <!-- CUT -->
+    <section class="page" id="page-cut" data-page="cut" hidden>
+      <div class="cut-top">
+        <section class="panel" aria-label="Source viewer">
+          <div class="panel-h"><span class="ptitle">Source</span><span class="muted" id="cut-src-name"></span></div>
+          <div class="vfit"><canvas data-viewer="source" width="960" height="540"></canvas></div>
+        </section>
+        <section class="panel" aria-label="Timeline viewer">
+          <div class="panel-h"><span class="ptitle">Timeline</span><span class="muted">Timeline 1</span><span class="spacer"></span><span class="muted" data-bind="info"></span></div>
+          <div class="vfit"><canvas data-viewer="timeline" width="960" height="540"></canvas></div>
+          <div class="transport" data-slot="transport"></div>
+        </section>
+      </div>
+      <section class="panel" aria-label="Full timeline overview">
+        <div class="overview" id="overview" title="Click to move the playhead"></div>
+      </section>
+      <section class="panel tl-panel" aria-label="Cut timeline">
+        <div class="tl-bar">
+          <button class="btn" data-action="menu" data-menu="Smart Insert">Smart Insert</button>
+          <button class="btn" data-action="menu" data-menu="Append">Append</button>
+          <span class="sep"></span>
+          <button class="btn" data-action="split" title="Split Clip (Cmd+B)">Split Clip</button>
+          <button class="btn" data-action="delete" title="Delete selected clip">Delete</button>
+          <button class="btn" data-action="ripple" title="Ripple Delete selected clip">Ripple Delete</button>
+          <span class="spacer"></span>
+          <span class="tcread muted">Playhead <b data-bind="tc">00:00:00:00</b></span>
+        </div>
+        <div class="tl" data-tracks="V1,A1"></div>
+      </section>
+    </section>
+
+    <!-- EDIT -->
+    <section class="page" id="page-edit" data-page="edit">
+      <div class="edit-top">
+        <section class="panel" aria-label="Media Pool and Effects">
+          <div class="panel-h tabs" role="tablist">
+            <button role="tab" data-action="pool-tab" data-tab="pool" aria-selected="true">Media Pool</button>
+            <button role="tab" data-action="pool-tab" data-tab="fx" aria-selected="false">Effects</button>
+          </div>
+          <div class="panel-b" id="pool-body"><div class="pool" data-slot="pool-edit"></div></div>
+          <div class="panel-b" id="fx-body" hidden>
+            <ul class="fxlist">
+              <li><div class="fxhead">Toolbox</div></li>
+              <li><div class="fxhead" style="padding-left:16px">Video Transitions</div></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Cross Dissolve">Cross Dissolve</button></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Dip to Color">Dip to Color</button></li>
+              <li><div class="fxhead" style="padding-left:16px">Titles</div></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Text"><b>T</b>Text</button></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Text+"><b>T+</b>Text+</button></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Lower 3rd"><b>L</b>Lower 3rd</button></li>
+              <li><div class="fxhead" style="padding-left:16px">Generators</div></li>
+              <li><button class="fxitem" data-action="fx-item" data-fx="Solid Color">Solid Color</button></li>
+            </ul>
+          </div>
+        </section>
+        <section class="panel" aria-label="Viewer">
+          <div class="panel-h"><span class="ptitle">Viewer</span><span class="muted">Timeline 1</span><span class="spacer"></span><span class="muted" data-bind="info"></span></div>
+          <div class="vfit"><canvas data-viewer="timeline" width="960" height="540" aria-label="Viewer: the frame at the playhead"></canvas></div>
+          <div class="transport" data-slot="transport"></div>
+        </section>
+        <section class="panel" aria-label="Inspector">
+          <div class="panel-h tabs" role="tablist">
+            <button role="tab" data-action="insp-tab" data-tab="video" aria-selected="true">Video</button>
+            <button role="tab" data-action="insp-tab" data-tab="audio" aria-selected="false">Audio</button>
+            <span class="spacer"></span><span class="insp-t" id="insp-target">No clip selected</span>
+          </div>
+          <div class="panel-b" id="insp-video">
+            <p class="insp-note" id="insp-note">Select a clip on the timeline to edit it.</p>
+            <h4 class="sec">Transform</h4>
+            <div class="rowf"><label for="f-zoom">Zoom</label><input class="fld" id="f-zoom" data-field="zoom" autocomplete="off" spellcheck="false"><span class="unit">x</span></div>
+            <div class="rowf"><label for="f-posx">Position X</label><input class="fld" id="f-posx" data-field="posx" autocomplete="off" spellcheck="false"><span class="unit">px</span></div>
+            <div class="rowf"><label for="f-posy">Position Y</label><input class="fld" id="f-posy" data-field="posy" autocomplete="off" spellcheck="false"><span class="unit">px</span></div>
+            <h4 class="sec" style="margin-top:16px">Composite</h4>
+            <div class="rowf"><label for="f-opacity">Opacity</label><input class="fld" id="f-opacity" data-field="opacity" autocomplete="off" spellcheck="false"><span class="unit">%</span></div>
+          </div>
+          <div class="panel-b" id="insp-audio" hidden>
+            <p class="insp-note" id="insp-note-a">Select an audio clip to set its volume.</p>
+            <h4 class="sec">Volume</h4>
+            <div class="rowf"><label for="f-vol">Volume</label><input class="fld" id="f-vol" data-field="vol" autocomplete="off" spellcheck="false"><span class="unit">dB</span></div>
+            <p class="insp-note">Same value as the track fader on the Fairlight page.</p>
+          </div>
+        </section>
+      </div>
+      <section class="panel tl-panel" aria-label="Timeline">
+        <div class="tl-bar">
+          <button class="btn on" data-action="tool" data-tool="select" aria-pressed="true" title="Selection mode">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1l8 6.5-3.6.7L9.4 13 7.6 13.8 5.6 8.6 3 11z"/></svg>Selection</button>
+          <button class="btn" data-action="tool" data-tool="blade" aria-pressed="false" title="Blade: click a clip to cut it there">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12L12 2M9 2h3v3M4 8l2 2"/></svg>Blade</button>
+          <span class="sep"></span>
+          <button class="btn" data-action="split" title="Split Clip at the playhead (Cmd+B)">Split Clip</button>
+          <button class="btn" data-action="delete" title="Delete the selected clip and leave a gap (Backspace)">Delete</button>
+          <button class="btn" data-action="ripple" title="Ripple Delete: delete the selected clip and close the gap (Forward Delete)">Ripple Delete</button>
+          <button class="btn" data-action="add-title" title="Add a title on V2 at the playhead">Add Title</button>
+          <span class="sep"></span>
+          <label for="tc-input">Timecode</label>
+          <input class="fld" id="tc-input" data-field="tc" value="00:00:00:00" autocomplete="off" spellcheck="false" aria-label="Timecode: type a time and press Enter">
+          <span class="muted">Duration <b class="mono" data-bind="dur" style="color:var(--text)">00:01:00:00</b></span>
+          <span class="tl-sel" id="tl-sel"></span>
+        </div>
+        <div class="tl" data-tracks="V2,V1,A1,A2" id="tl-edit"></div>
+      </section>
+    </section>
+
+    <!-- FAIRLIGHT -->
+    <section class="page" id="page-fair" data-page="fair" hidden>
+      <section class="panel tl-panel" aria-label="Audio timeline">
+        <div class="panel-h"><span class="ptitle">Audio timeline</span><span class="muted">Timeline 1</span><span class="spacer"></span>
+          <span class="tcread muted">Playhead <b data-bind="tc">00:00:00:00</b></span>
+          <button class="btn" data-action="play">Play</button>
+        </div>
+        <div class="tl" data-tracks="A1,A2"></div>
+      </section>
+      <section class="panel" aria-label="Mixer">
+        <div class="panel-h"><span class="ptitle">Mixer</span><span class="muted">Faders in dB. Type a value in the box under a fader and press Enter.</span></div>
+        <div class="mixer" id="mixer"></div>
+      </section>
+    </section>
+
+    <!-- COLOR -->
+    <section class="page" id="page-color" data-page="color" hidden>
+      <div class="color-top">
+        <section class="panel" aria-label="Gallery">
+          <div class="panel-h"><span class="ptitle">Gallery</span><span class="muted">Stills</span></div>
+          <div class="panel-b"><div class="gallery" id="gallery"></div></div>
+        </section>
+        <section class="panel" aria-label="Color viewer">
+          <div class="panel-h"><span class="ptitle">Viewer</span><span class="look-line">Look: <b id="look-name">Neutral</b></span><span class="spacer"></span><span class="muted" data-bind="info"></span></div>
+          <div class="vfit"><canvas data-viewer="timeline" width="960" height="540" aria-label="Viewer: graded frame at the playhead"></canvas></div>
+          <div class="transport" data-slot="transport"></div>
+        </section>
+        <section class="panel" aria-label="Nodes">
+          <div class="panel-h"><span class="ptitle">Nodes</span><span class="muted">Clip graph</span></div>
+          <div class="panel-b">
+            <svg class="node-svg" viewBox="0 0 250 200" role="img" aria-label="Node graph: Node 01">
+              <circle cx="24" cy="100" r="9" fill="#2e2e32" stroke="#85858f"/><text x="8" y="130">Source</text>
+              <path d="M33 100H78" stroke="#85858f" stroke-width="2"/>
+              <rect x="78" y="78" width="96" height="44" rx="4" fill="#3b2d16" stroke="#f0a23b" stroke-width="2"/>
+              <text x="97" y="104" style="font-weight:600">Node 01</text>
+              <path d="M174 100H216" stroke="#85858f" stroke-width="2"/>
+              <circle cx="226" cy="100" r="9" fill="#2e2e32" stroke="#85858f"/><text x="206" y="130">Out</text>
+            </svg>
+            <p class="insp-note" style="margin-top:14px">Node 01 is the only node. Its Primaries apply to the whole timeline.</p>
+            <button class="btn" data-action="color-reset">Reset all</button>
+          </div>
+        </section>
+      </div>
+      <section class="panel" aria-label="Primaries">
+        <div class="panel-h"><span class="ptitle">Primaries</span><span class="muted">Color wheels. Click inside a wheel to move its dot.</span></div>
+        <div class="prim">
+          <div class="wheels" id="wheels"></div>
+          <div>
+            <div class="pf" id="pf"></div>
+            <p class="insp-note" style="margin-top:12px">Type a value in a box and press Enter. Temp and Tint: -100 to 100. Contrast, Saturation and Hue: 0 to 100.</p>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- DELIVER -->
+    <section class="page" id="page-deliver" data-page="deliver" hidden>
+      <section class="panel" aria-label="Render Settings">
+        <div class="panel-h"><span class="ptitle">Render Settings</span></div>
+        <div class="panel-b" style="padding:12px">
+          <h4 class="sec">Preset</h4>
+          <div class="presets" id="presets"></div>
+          <dl class="dl">
+            <dt><label for="dl-filename">Filename</label></dt><dd><input class="fld text" id="dl-filename" value="Lisbon_in_3_days" autocomplete="off" spellcheck="false"></dd>
+            <dt>Location</dt><dd class="muted">~/Movies/Lisbon</dd>
+            <dt>Format</dt><dd id="dl-format"></dd>
+            <dt>Codec</dt><dd id="dl-codec"></dd>
+            <dt>Resolution</dt><dd id="dl-res"></dd>
+            <dt>Frame rate</dt><dd>25 fps</dd>
+          </dl>
+          <button class="btn primary" data-action="queue-add" style="height:32px">Add to Render Queue</button>
+        </div>
+      </section>
+      <section class="panel" aria-label="Render Queue">
+        <div class="panel-h"><span class="ptitle">Render Queue</span><span class="muted">Timeline 1 · whole timeline</span></div>
+        <div class="panel-b" id="queue" style="padding:12px"></div>
+        <div class="q-actions">
+          <button class="btn primary" id="btn-start" data-action="render-start" style="height:32px">Start Render</button>
+          <button class="btn" id="btn-publish" data-action="publish" style="height:32px" disabled>Publish to YouTube</button>
+          <button class="btn" data-action="queue-clear" id="btn-clear" style="height:32px">Clear Queue</button>
+          <span class="q-status" id="q-status" style="margin-left:12px">Idle</span>
+        </div>
+      </section>
+    </section>
+
+  </main>
+
+  <nav class="pagebar" aria-label="Pages">
+    <div class="pb-side">
+      <div class="logo" style="padding:0"><i aria-hidden="true"></i></div>
+      <div class="pb-name"><b>Grade Studio</b><span>Lisbon in 3 days</span></div>
+    </div>
+    <div class="pages" id="pages" role="group" aria-label="Workspace pages"></div>
+    <div class="pb-side right">
+      <button class="iconbtn" data-action="menu" data-menu="Project Manager" aria-label="Project Manager (home)" title="Project Manager"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9.5L10 3l7 6.5M5 8.5V16h10V8.5"/></svg></button>
+      <button class="iconbtn" data-action="menu" data-menu="Project Settings" aria-label="Project Settings" title="Project Settings"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.8"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M15.3 4.7l-1.6 1.6M6.3 13.7l-1.6 1.6"/></svg></button>
+    </div>
+  </nav>
+</div>
+<div id="dialog-root"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ============ helpers ============ */
+const FPS = 25, PPS = 15;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const q = t => Math.round(t * FPS) / FPS;
+const r2 = v => Math.round(v * 100) / 100;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtNum = v => Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
+const fmtDb = v => v.toFixed(1);
+function tc(t) {
+  const f = Math.round(Math.max(0, t) * FPS), ff = f % FPS, s = Math.floor(f / FPS);
+  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60, ff].map(n => String(n).padStart(2, '0')).join(':');
+}
+function parseTC(str) {
+  const s = String(str).trim().replace(/;/g, ':');
+  if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  if (!/^\d+(:\d+){1,3}$/.test(s)) return null;
+  const p = s.split(':').map(Number);
+  if (p.length === 2) return p[0] * 60 + p[1];
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  return p[0] * 3600 + p[1] * 60 + p[2] + p[3] / FPS;
+}
+function parseNum(str) {
+  const n = parseFloat(String(str).replace(',', '.').replace(/db|%|px|x/gi, '').replace(/\s/g, '').replace(/^[−–]/, '-'));
+  return Number.isFinite(n) ? n : null;
+}
+
+const I = {
+  start: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 2h2v10H2zM12 2v10L5 7z"/></svg>',
+  back: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M11 2v10L4 7z"/></svg>',
+  play: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5v11L12 7z"/></svg>',
+  pause: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 2h3v10H3zM8 2h3v10H8z"/></svg>',
+  fwd: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 2v10l7-5z"/></svg>',
+  end: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M10 2h2v10h-2zM2 2v10l7-5z"/></svg>',
+};
+const PAGE_ICONS = {
+  media: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M7 4v12M13 4v12M3 8h4M3 12h4M13 8h4M13 12h4"/></svg>',
+  cut: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="4" width="6.5" height="4.5"/><rect x="11" y="4" width="6.5" height="4.5"/><rect x="2.5" y="11.5" width="10" height="4.5"/></svg>',
+  edit: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="8" height="3.5"/><rect x="3" y="9" width="14" height="3.5"/><rect x="3" y="14" width="10" height="3"/></svg>',
+  fair: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v14M10 3v14M14 3v14"/><circle cx="6" cy="7" r="1.9" fill="currentColor"/><circle cx="10" cy="13" r="1.9" fill="currentColor"/><circle cx="14" cy="8" r="1.9" fill="currentColor"/></svg>',
+  color: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 010 14z" fill="currentColor"/></svg>',
+  deliver: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v9M6.5 8.5L10 12l3.5-3.5M4 15.5h12"/></svg>',
+};
+const PAGES = [['media', 'Media'], ['cut', 'Cut'], ['edit', 'Edit'], ['fair', 'Fairlight'], ['color', 'Color'], ['deliver', 'Deliver']];
+
+/* ============ media + state ============ */
+const MEDIA = [
+  { name: 'Lisbon_intro.mp4', scene: 'intro', kind: 'video', dur: 12, res: '3840 x 2160', codec: 'H.264' },
+  { name: 'Tram_28.mp4', scene: 'tram', kind: 'video', dur: 24, res: '3840 x 2160', codec: 'H.264' },
+  { name: 'Market_walk.mp4', scene: 'market', kind: 'video', dur: 40, res: '1920 x 1080', codec: 'H.264' },
+  { name: 'Viewpoint.mp4', scene: 'view', kind: 'video', dur: 30, res: '3840 x 2160', codec: 'H.265' },
+  { name: 'Sunset_pier.mp4', scene: 'pier', kind: 'video', dur: 35, res: '3840 x 2160', codec: 'H.265' },
+  { name: 'Music_lofi.wav', scene: null, kind: 'audio', dur: 180, res: '48 kHz stereo', codec: 'PCM' },
+];
+const IMPORT_ITEM = { name: 'Drone_coast.mp4', scene: 'coast', kind: 'video', dur: 28, res: '3840 x 2160', codec: 'H.265' };
+
+const LOOKS = {
+  'Neutral': { temp: 0, tint: 0, contrast: 50, saturation: 50, hue: 50, lift: { x: 0, y: 0 }, gamma: { x: 0, y: 0 }, gain: { x: 0, y: 0 } },
+  'Warm Teal': { temp: 22, tint: -8, contrast: 58, saturation: 56, hue: 50, lift: { x: -0.55, y: -0.35 }, gamma: { x: 0, y: 0 }, gain: { x: 0.35, y: 0.2 } },
+  'Golden Hour': { temp: 48, tint: 6, contrast: 56, saturation: 64, hue: 50, lift: { x: 0, y: 0 }, gamma: { x: 0.1, y: 0.1 }, gain: { x: 0.3, y: 0.25 } },
+  'Cool Film': { temp: -32, tint: 4, contrast: 62, saturation: 40, hue: 50, lift: { x: -0.2, y: -0.4 }, gamma: { x: 0, y: 0 }, gain: { x: 0, y: 0 } },
+};
+const copyLook = n => JSON.parse(JSON.stringify(LOOKS[n]));
+
+const PRESETS = {
+  'YouTube 1080p': { fmt: 'MP4', ext: 'mp4', codec: 'H.264', res: '1920 x 1080', note: 'MP4 · H.264' },
+  'YouTube 4K': { fmt: 'MP4', ext: 'mp4', codec: 'H.264', res: '3840 x 2160', note: 'MP4 · H.264' },
+  'Vimeo 1080p': { fmt: 'MP4', ext: 'mp4', codec: 'H.264', res: '1920 x 1080', note: 'MP4 · H.264' },
+  'H.264 Master': { fmt: 'QuickTime', ext: 'mov', codec: 'H.264 (high bitrate)', res: '1920 x 1080', note: 'MOV · H.264' },
+  'ProRes 422 HQ': { fmt: 'QuickTime', ext: 'mov', codec: 'Apple ProRes 422 HQ', res: '1920 x 1080', note: 'MOV · ProRes' },
+};
+
+const state = {
+  page: 'edit', tool: 'select', playhead: 0, phf: 0, playing: false, sel: null, nextId: 1,
+  clips: [], media: MEDIA.slice(), poolTab: 'pool', inspTab: 'video', mediaSel: 'Tram_28.mp4',
+  color: Object.assign(copyLook('Neutral'), { look: 'Neutral' }),
+  mixer: { A1: { db: 0, mute: false, solo: false }, A2: { db: 0, mute: false, solo: false }, Main: { db: 0, mute: false, solo: false } },
+  deliver: { preset: 'H.264 Master', queue: [], status: 'idle', published: false, nextJob: 1 },
+};
+function addClip(o) {
+  const c = Object.assign({ id: 'c' + state.nextId++, zoom: 1, posX: 0, posY: 0, opacity: 100, srcIn: 0, link: null }, o);
+  state.clips.push(c); return c;
+}
+[['Lisbon_intro.mp4', 0, 8], ['Tram_28.mp4', 8, 18], ['Market_walk.mp4', 18, 34], ['Viewpoint.mp4', 34, 46], ['Sunset_pier.mp4', 46, 60]].forEach(([n, s, e]) => {
+  const v = addClip({ track: 'V1', name: n, start: s, end: e, srcIn: 2 });
+  const a = addClip({ track: 'A1', name: n, start: s, end: e, srcIn: 2 });
+  v.link = a.id; a.link = v.id;
+});
+addClip({ track: 'A2', name: 'Music_lofi.wav', start: 0, end: 60 });
+
+const byId = id => state.clips.find(c => c.id === id) || null;
+const selClip = () => byId(state.sel);
+const clipAt = (track, t) => state.clips.find(c => c.track === track && t >= c.start - 1e-6 && t < c.end - 1e-6) || null;
+const mediaOf = name => state.media.find(m => m.name === name);
+function duration() {
+  return state.clips.filter(c => c.track === 'V1' || c.track === 'V2' || c.track === 'A1').reduce((m, c) => Math.max(m, c.end), 0);
+}
+
+/* ============ procedural footage ============ */
+function lg(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
+function poly(c, pts, fill) { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); c.fillStyle = fill; c.fill(); }
+function circ(c, x, y, r, fill) { c.beginPath(); c.arc(x, y, r, 0, 7); c.fillStyle = fill; c.fill(); }
+function box(c, x, y, w, h, fill) { c.fillStyle = fill; c.fillRect(x, y, w, h); }
+function hills(c, base, amp, seed, color) {
+  c.beginPath(); c.moveTo(0, 360);
+  for (let x = 0; x <= 640; x += 16) c.lineTo(x, base - amp * (Math.sin(x * 0.011 + seed) + 0.6 * Math.sin(x * 0.027 + seed * 2)));
+  c.lineTo(640, 360); c.closePath(); c.fillStyle = color; c.fill();
+}
+function glow(c, x, y, r, rgb) { const g = c.createRadialGradient(x, y, 6, x, y, r); g.addColorStop(0, `rgba(${rgb},.9)`); g.addColorStop(1, `rgba(${rgb},0)`); c.fillStyle = g; c.fillRect(0, 0, 640, 360); }
+const SCENES = {
+  intro(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 260, [[0, '#3d83d2'], [.65, '#9cc9e8'], [1, '#f8ddb0']]));
+    const sx = 470 - t * 1.5, sy = 112; glow(c, sx, sy, 150, '255,244,200'); circ(c, sx, sy, 34, '#fff6d2');
+    for (let i = 0; i < 3; i++) {
+      const x = ((i * 260 + t * 8) % 820) - 100, y = 58 + i * 30; c.fillStyle = 'rgba(255,255,255,.85)';
+      [[0, 0, 46, 13], [-30, 6, 30, 10], [34, 5, 34, 10]].forEach(([dx, dy, rx, ry]) => { c.beginPath(); c.ellipse(x + dx, y + dy, rx, ry, 0, 0, 7); c.fill(); });
+    }
+    hills(c, 222, 16, 1, '#7a9db0'); hills(c, 262, 20, 2.3, '#5f9266');
+    for (let x = 16; x < 640; x += 47) { const y = 268 + ((x * 7) % 23); box(c, x, y, 26, 18, '#f1e6d0'); poly(c, [[x - 3, y], [x + 13, y - 12], [x + 29, y]], '#c4553a'); box(c, x + 9, y + 7, 6, 11, '#8a6a4a'); }
+    hills(c, 318, 12, 4, '#3c6e49');
+  },
+  tram(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 200, [[0, '#bcd8ea'], [1, '#f4ead6']]));
+    [[0, 60, 140, '#d8b98e'], [140, 100, 110, '#c98b6a'], [390, 50, 130, '#e4d29f'], [520, 90, 120, '#b7a99a']].forEach(([x, y, w, col]) => {
+      box(c, x, y, w, 250 - y, col);
+      for (let wy = y + 14; wy < 230; wy += 34) for (let wx = x + 12; wx < x + w - 18; wx += 30) { box(c, wx, wy, 16, 22, '#4b5a6b'); box(c, wx, wy, 16, 3, '#2f3b48'); }
+    });
+    box(c, 0, 250, 640, 110, '#4a4a50'); box(c, 0, 250, 640, 6, '#8a8a90');
+    box(c, 0, 296, 640, 3, '#a4a4ad'); box(c, 0, 326, 640, 3, '#a4a4ad');
+    for (let x = ((-t * 20) % 60) - 60; x < 640; x += 60) box(c, x, 312, 30, 2, '#6c6c74');
+    c.strokeStyle = '#222'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, 150); c.lineTo(640, 150); c.stroke();
+    const tx = 170 + 90 * Math.sin(t * .45);
+    box(c, tx, 196, 230, 76, '#f2c230'); box(c, tx, 258, 230, 8, '#c8951a'); box(c, tx, 244, 230, 5, '#fff7dd');
+    for (let i = 0; i < 5; i++) box(c, tx + 14 + i * 43, 208, 34, 28, '#2d3947');
+    circ(c, tx + 40, 276, 10, '#222'); circ(c, tx + 190, 276, 10, '#222');
+    c.beginPath(); c.moveTo(tx + 115, 196); c.lineTo(tx + 95, 168); c.lineTo(tx + 135, 150); c.stroke();
+    c.fillStyle = '#b3261e'; c.font = 'bold 20px sans-serif'; c.fillText('28', tx + 192, 234);
+  },
+  market(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 360, [[0, '#efe0c4'], [.6, '#e0c79b'], [1, '#9a8a73']]));
+    box(c, 0, 250, 640, 110, '#8f8170');
+    for (let x = 0; x < 640; x += 40) for (let y = 256; y < 360; y += 22) box(c, x + ((y / 22) % 2) * 20, y, 18, 8, 'rgba(0,0,0,.12)');
+    c.strokeStyle = '#4a3a2a'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, 34); for (let x = 0; x <= 640; x += 20) c.lineTo(x, 34 + 16 * Math.sin(x * .02 + t * .8) + 14); c.stroke();
+    for (let x = 10; x < 640; x += 36) poly(c, [[x, 48 + 14 * Math.sin(x * .02 + t * .8) + 2], [x + 24, 48 + 14 * Math.sin(x * .02 + t * .8) + 2 + 2], [x + 12, 66 + 14 * Math.sin(x * .02 + t * .8)]], ['#d9453a', '#f2c230', '#2f9e6a', '#3b7cf0'][(x / 36 | 0) % 4]);
+    [['#d9453a', 28], ['#2f9e6a', 236], ['#3b7cf0', 444]].forEach(([col, x0]) => {
+      for (let k = 0; k < 8; k++) box(c, x0 + k * 21, 110, 21, 50, k % 2 ? '#fdf6e6' : col);
+      poly(c, [[x0, 160], [x0 + 168, 160], [x0 + 150, 176], [x0 + 18, 176]], col);
+      box(c, x0 + 10, 176, 6, 84, '#5b4630'); box(c, x0 + 152, 176, 6, 84, '#5b4630');
+      box(c, x0 + 4, 218, 160, 14, '#7a5a38'); box(c, x0 + 4, 232, 160, 28, '#a07a4c');
+      for (let k = 0; k < 6; k++) circ(c, x0 + 22 + k * 24, 210, 9, ['#f08a1c', '#d9453a', '#8cc63f'][(k + x0 / 28 | 0) % 3]);
+    });
+    [[130, '#2b3a55'], [340, '#7a2e3a'], [560, '#3d4f3a']].forEach(([x, col], i) => {
+      const px = x + 22 * Math.sin(t * .6 + i * 2); circ(c, px, 262, 11, '#e7b995'); box(c, px - 14, 273, 28, 62, col);
+    });
+  },
+  view(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 200, [[0, '#4b8fdc'], [1, '#d6e8f2']]));
+    glow(c, 120 + t, 70, 120, '255,255,230');
+    hills(c, 178, 12, 5, '#8fa8b8');
+    box(c, 0, 190, 640, 34, lg(c, 0, 190, 0, 224, [[0, '#3f87b5'], [1, '#2a6b94']]));
+    for (let row = 0; row < 7; row++) {
+      const y = 214 + row * 19, h = 10 + row * 4;
+      for (let x = -10 + (row % 2) * 14; x < 650; x += 22 + row * 4) {
+        const w = 18 + row * 4, col = ['#c4553a', '#d8704a', '#b5472f', '#e08a5c'][(x + row * 3) / 7 & 3];
+        box(c, x, y + 2, w, h, ['#f0e4d0', '#f6efe0', '#e8d9bd'][(x / 9 | 0) % 3]); poly(c, [[x - 2, y + 2], [x + w / 2, y - h * .5], [x + w + 2, y + 2]], col);
+      }
+    }
+    box(c, 360, 176, 34, 70, '#f3ecdc'); poly(c, [[360, 176], [377, 148], [394, 176]], '#e7dcc6'); circ(c, 377, 148, 3, '#caa86a');
+    box(c, 0, 322, 640, 38, '#1d1d22'); for (let x = 6; x < 640; x += 26) box(c, x, 290, 5, 34, '#1d1d22'); box(c, 0, 290, 640, 6, '#26262c');
+  },
+  pier(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 215, [[0, '#2a1d52'], [.5, '#b84a4a'], [1, '#ffb15c']]));
+    const sy = 205 + Math.min(14, t * .4); glow(c, 320, sy, 190, '255,190,110'); circ(c, 320, sy, 46, '#ffe3a8');
+    box(c, 0, 215, 640, 145, lg(c, 0, 215, 0, 360, [[0, '#e8703a'], [.35, '#7a3b55'], [1, '#16204a']]));
+    for (let i = 0; i < 16; i++) { const w = 150 - i * 7 + 20 * Math.sin(t * 1.2 + i), y = 218 + i * 8; box(c, 320 - w / 2, y, w, 2.5, `rgba(255,200,120,${.7 - i * .04})`); }
+    poly(c, [[262, 360], [378, 360], [327, 222], [313, 222]], '#2a1f1a');
+    for (let i = 0; i < 9; i++) { const y = 360 - i * i * 1.8 - i * 12; box(c, 320 - (58 - i * 5.5), y, (58 - i * 5.5) * 2, 2, 'rgba(255,170,110,.35)'); }
+    [[286, 330], [354, 330], [301, 270], [339, 270]].forEach(([x, y]) => { box(c, x - 3, y - 40, 6, 52, '#150f0d'); circ(c, x, y - 42, 3.5, '#ffd98a'); });
+  },
+  coast(c, t) {
+    box(c, 0, 0, 640, 360, lg(c, 0, 0, 0, 360, [[0, '#46b6d8'], [1, '#0c5f86']]));
+    for (let i = 0; i < 22; i++) { const y = 20 + i * 15, x = ((i * 97 + t * (10 + i)) % 700) - 40; box(c, x, y, 70, 2, 'rgba(255,255,255,.45)'); }
+    poly(c, [[0, 0], [250, 0], [210, 90], [150, 150], [90, 260], [0, 360]], '#c9a66b'); poly(c, [[0, 0], [250, 0], [236, 28], [180, 52], [60, 70], [0, 80]], '#4f8f4a');
+    poly(c, [[0, 360], [90, 260], [150, 150], [210, 90], [232, 100], [190, 170], [140, 280], [110, 360]], 'rgba(255,255,255,.5)');
+    box(c, 520, 280, 120, 80, 'rgba(255,255,255,.18)');
+  },
+};
+function drawMedia(ctx, w, h, name, t) {
+  const m = mediaOf(name) || MEDIA.concat([IMPORT_ITEM]).find(x => x.name === name);
+  ctx.save(); ctx.scale(w / 640, h / 360);
+  if (m && m.scene) SCENES[m.scene](ctx, t); else { box(ctx, 0, 0, 640, 360, '#2a2230'); }
+  ctx.restore();
+}
+function waveSVG(c, w, h) {
+  const n = Math.max(8, Math.floor(w / 3)), phase = Math.round(c.srcIn * PPS / 3), mid = h / 2; let d = '';
+  for (let i = 0; i < n; i++) {
+    const k = i + phase, amp = (0.18 + 0.82 * Math.abs(Math.sin(k * 0.31) * Math.sin(k * 0.071 + 1.3) + 0.25 * Math.sin(k * 1.9))) * h * 0.42;
+    d += `M${i * 3 + 1} ${(mid - amp).toFixed(1)}V${(mid + amp).toFixed(1)}`;
+  }
+  return `<svg class="wave" viewBox="0 0 ${n * 3} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+const THUMBS = {};
+function makeThumbs() {
+  MEDIA.concat([IMPORT_ITEM]).forEach(m => {
+    const cv = document.createElement('canvas'); cv.width = 192; cv.height = 108; const c = cv.getContext('2d');
+    if (m.scene) drawMedia(c, 192, 108, m.name, 3);
+    else {
+      box(c, 0, 0, 192, 108, '#2a2230'); c.strokeStyle = '#f0a23b'; c.lineWidth = 2; c.beginPath();
+      for (let i = 0; i < 96; i++) { const a = 6 + 36 * Math.abs(Math.sin(i * .31) * Math.sin(i * .07 + 1)); c.moveTo(i * 2 + 1, 54 - a); c.lineTo(i * 2 + 1, 54 + a); } c.stroke();
+    }
+    THUMBS[m.name] = cv.toDataURL('image/jpeg', 0.8);
+  });
+}
+
+/* ============ colour grading ============ */
+let gradeCache = { k: '', v: null };
+function isNeutral(col) {
+  return col.temp === 0 && col.tint === 0 && col.contrast === 50 && col.saturation === 50 && col.hue === 50 &&
+    ['lift', 'gamma', 'gain'].every(w => col[w].x === 0 && col[w].y === 0);
+}
+function makeGrade(col) {
+  const key = JSON.stringify([col.temp, col.tint, col.contrast, col.saturation, col.hue, col.lift, col.gamma, col.gain]);
+  if (gradeCache.k === key) return gradeCache.v;
+  const wv = w => { const m = Math.min(1, Math.hypot(w.x, w.y)), a = Math.atan2(w.y, w.x); return [m * Math.cos(a), m * Math.cos(a - 2.0944), m * Math.cos(a + 2.0944)]; };
+  const L = wv(col.lift), G = wv(col.gamma), N = wv(col.gain);
+  const T = col.temp / 100, Ti = col.tint / 100, kc = 1 + (col.contrast - 50) / 50 * 0.7;
+  const luts = [0, 1, 2].map(ch => {
+    const a = new Uint8ClampedArray(256);
+    for (let v = 0; v < 256; v++) {
+      let x = v / 255;
+      if (ch === 0) x += T * 0.55; else if (ch === 2) x -= T * 0.55; else x -= Ti * 0.15;
+      x += L[ch] * 0.22 * (1 - x); x += G[ch] * 0.25 * 4 * x * (1 - x); x *= 1 + N[ch] * 0.4;
+      x = (x - 0.5) * kc + 0.5; a[v] = Math.round(clamp(x, 0, 1) * 255);
+    }
+    return a;
+  });
+  const s = col.saturation / 50, th = (col.hue - 50) / 50 * Math.PI, ca = Math.cos(th), sa = Math.sin(th);
+  const S = [.213 + .787 * s, .715 - .715 * s, .072 - .072 * s, .213 - .213 * s, .715 + .285 * s, .072 - .072 * s, .213 - .213 * s, .715 - .715 * s, .072 + .928 * s];
+  const H = [.213 + ca * .787 - sa * .213, .715 - ca * .715 - sa * .715, .072 - ca * .072 + sa * .928,
+    .213 - ca * .213 + sa * .143, .715 + ca * .285 + sa * .140, .072 - ca * .072 - sa * .283,
+    .213 - ca * .213 - sa * .787, .715 - ca * .715 + sa * .715, .072 + ca * .928 + sa * .072];
+  const M = [];
+  for (let r = 0; r < 3; r++) for (let cc = 0; cc < 3; cc++) M.push(H[r * 3] * S[cc] + H[r * 3 + 1] * S[3 + cc] + H[r * 3 + 2] * S[6 + cc]);
+  gradeCache = { k: key, v: { luts, M } };
+  return gradeCache.v;
+}
+function gradeImage(ctx, w, h, col) {
+  if (isNeutral(col)) return;
+  const { luts, M } = makeGrade(col), img = ctx.getImageData(0, 0, w, h), d = img.data, l0 = luts[0], l1 = luts[1], l2 = luts[2];
+  for (let i = 0; i < d.length; i += 4) {
+    const r = l0[d[i]], g = l1[d[i + 1]], b = l2[d[i + 2]];
+    d[i] = M[0] * r + M[1] * g + M[2] * b; d[i + 1] = M[3] * r + M[4] * g + M[5] * b; d[i + 2] = M[6] * r + M[7] * g + M[8] * b;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ============ viewer painting ============ */
+const off = document.createElement('canvas'); off.width = 640; off.height = 360;
+const octx = off.getContext('2d', { willReadFrequently: true });
+function renderScene(t) {
+  const v = clipAt('V1', t);
+  octx.setTransform(1, 0, 0, 1, 0, 0); octx.fillStyle = '#000'; octx.fillRect(0, 0, 640, 360);
+  if (v) {
+    octx.save(); octx.translate(320 + v.posX * (640 / 1920), 180 + v.posY * (360 / 1080)); octx.scale(v.zoom, v.zoom); octx.translate(-320, -180);
+    const m = mediaOf(v.name); if (m && m.scene) SCENES[m.scene](octx, v.srcIn + (t - v.start)); octx.restore();
+    if (v.opacity < 100) { octx.fillStyle = `rgba(0,0,0,${1 - v.opacity / 100})`; octx.fillRect(0, 0, 640, 360); }
+  }
+  gradeImage(octx, 640, 360, state.color);
+  return v;
+}
+function labelBox(c, text, x, y, fs, align) {
+  c.font = `600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`; const w = c.measureText(text).width + fs * 1.1, h = fs * 1.7;
+  const bx = align === 'right' ? x - w : x; c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(bx, y, w, h);
+  c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillText(text, bx + fs * .55, y + h / 2 + 1);
+}
+function paintTimelineViewer(cv) {
+  const W = cv.width, H = cv.height, c = cv.getContext('2d'), t = state.playhead, v = renderScene(t);
+  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(off, 0, 0, W, H);
+  if (v) labelBox(c, v.name, 12, 12, Math.round(W / 62), 'left');
+  else { c.fillStyle = '#777'; c.font = `500 ${Math.round(W / 50)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('No clip at playhead', W / 2, H / 2); }
+  state.clips.filter(x => x.track === 'V2' && t >= x.start && t < x.end).forEach((ti, idx) => {
+    let fs = Math.round(W * 0.066); c.font = `800 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;
+    const mw = c.measureText(ti.title).width; if (mw > W * .88) { fs = Math.floor(fs * W * .88 / mw); c.font = `800 ${fs}px -apple-system,Helvetica,Arial,sans-serif`; }
+    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(0,0,0,.8)'; c.shadowBlur = W * .014; c.shadowOffsetY = W * .005;
+    c.fillStyle = '#fff'; c.fillText(ti.title, W / 2, H / 2 + idx * fs * 1.2); c.restore();
+  });
+  c.textBaseline = 'alphabetic';
+}
+function paintSourceViewer(cv) {
+  const W = cv.width, H = cv.height, c = cv.getContext('2d'), name = state.mediaSel, m = mediaOf(name);
+  box(c, 0, 0, W, H, '#000'); drawMedia(c, W, H, name, 3);
+  if (m) labelBox(c, m.name, 12, 12, Math.round(W / 62), 'left');
+  c.textBaseline = 'alphabetic';
+}
+function visible(el) { return el.offsetParent !== null; }
+function paintViewers() {
+  $$('canvas[data-viewer]').forEach(cv => { if (!visible(cv)) return; cv.dataset.viewer === 'source' ? paintSourceViewer(cv) : paintTimelineViewer(cv); });
+}
+function fitViewers() {
+  $$('.vfit').forEach(box => {
+    const cv = $('canvas', box), w = box.clientWidth, h = box.clientHeight; if (!w || !h) return;
+    let cw = w, ch = w * 9 / 16; if (ch > h) { ch = h; cw = h * 16 / 9; }
+    cv.style.width = Math.floor(cw) + 'px'; cv.style.height = Math.floor(ch) + 'px';
+  });
+}
+
+/* ============ timeline rendering ============ */
+const LANE_H = { V2: 40, V1: 52, A1: 40, A2: 40 };
+const LANE_N = { V2: 'Titles', V1: 'Video 1', A1: 'Clip audio', A2: 'Music' };
+function isSelected(c) { return state.sel && (c.id === state.sel || (selClip() && selClip().link === c.id)); }
+function buildTimelines() {
+  $$('.tl').forEach(el => {
+    const tracks = el.dataset.tracks.split(',');
+    el.innerHTML = `<div class="tl-heads"><div class="tl-corner"></div>${tracks.map(t => `<div class="tl-head" style="height:${LANE_H[t]}px"><b>${t}</b><span>${LANE_N[t]}</span></div>`).join('')}</div><div class="tl-scroll"><div class="tl-inner"></div></div>`;
+  });
+}
+function clipHTML(c) {
+  const left = c.start * PPS, w = (c.end - c.start) * PPS, sel = isSelected(c);
+  let style = `left:${left}px;width:${w}px;`;
+  if (c.track === 'V1' && THUMBS[c.name]) style += `background-image:url(${THUMBS[c.name]});`;
+  const label = c.track === 'V2' ? esc(c.title) : esc(c.name);
+  const sub = c.track === 'V1' ? `<span class="csub">${(c.end - c.start).toFixed(1)} s</span>` : '';
+  const wave = c.track === 'A1' || c.track === 'A2' ? waveSVG(c, w, LANE_H[c.track] - 6) : '';
+  const prefix = c.track === 'V2' ? 'T  ' : '';
+  return `<div class="clip t-${c.track}${sel ? ' sel' : ''}" data-id="${c.id}" role="button" tabindex="-1" aria-label="${c.track} ${esc(c.track === 'V2' ? c.title : c.name)}, ${c.start.toFixed(1)} to ${c.end.toFixed(1)} seconds" style="${style}">${wave}<span class="cname">${prefix}${label}</span>${sub}</div>`;
+}
+function renderTimelines() {
+  const endT = Math.max(duration(), 60) + 20, width = Math.ceil(endT * PPS) + 20;
+  $$('.tl').forEach(el => {
+    const tracks = el.dataset.tracks.split(','), inner = $('.tl-inner', el);
+    let ticks = '';
+    for (let s = 0; s <= endT; s++) {
+      const maj = s % 5 === 0;
+      ticks += `<i class="${maj ? 'maj' : ''}" style="left:${s * PPS}px"></i>`;
+      if (maj) ticks += `<span style="left:${s * PPS}px">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`;
+    }
+    inner.style.width = width + 'px';
+    inner.innerHTML = `<div class="ruler" data-ruler="1" title="Click the ruler to move the playhead">${ticks}</div>` +
+      tracks.map(t => `<div class="lane" data-lane="${t}" style="height:${LANE_H[t]}px">${state.clips.filter(c => c.track === t).map(clipHTML).join('')}</div>`).join('') +
+      '<div class="playhead"></div>';
+    el.classList.toggle('bladeon', state.tool === 'blade');
+  });
+  updatePlayhead();
+}
+function timeFromEvent(e, scroll) {
+  const inner = $('.tl-inner', scroll), rect = inner.getBoundingClientRect();
+  return Math.max(0, (e.clientX - rect.left) / PPS);
+}
+function timelineClick(e) {
+  const scroll = e.target.closest('.tl-scroll'); if (!scroll) return;
+  const clipEl = e.target.closest('.clip');
+  if (clipEl) {
+    const c = byId(clipEl.dataset.id); if (!c) return;
+    if (state.tool === 'blade') {
+      const t = q(timeFromEvent(e, scroll)); setPlayhead(t); state.sel = c.id; splitClip(c); return;
+    }
+    state.sel = c.id; refresh(); return;
+  }
+  if (e.target.closest('.ruler')) { setPlayhead(q(timeFromEvent(e, scroll))); return; }
+  if (state.sel) { state.sel = null; refresh(); }
+}
+function updatePlayhead() {
+  $$('.playhead').forEach(p => { p.style.left = (state.playhead * PPS) + 'px'; });
+  $$('[data-bind=tc]').forEach(el => { el.textContent = tc(state.playhead); });
+  $$('[data-bind=dur]').forEach(el => { el.textContent = tc(duration()); });
+  const ti = $('#tc-input'); if (ti && document.activeElement !== ti) ti.value = tc(state.playhead);
+  const v = clipAt('V1', state.playhead);
+  $$('[data-bind=info]').forEach(el => { el.textContent = (v ? v.name : 'No clip') + ' · ' + tc(state.playhead); });
+  const ov = $('#overview .oph'); if (ov) ov.style.left = (state.playhead / Math.max(duration(), 1) * 100) + '%';
+}
+function ensureVisible() {
+  $$('.tl-scroll').forEach(s => {
+    if (!visible(s)) return; const x = state.playhead * PPS;
+    if (x < s.scrollLeft + 10 || x > s.scrollLeft + s.clientWidth - 30) s.scrollLeft = Math.max(0, x - s.clientWidth / 2);
+  });
+}
+
+/* ============ editing operations ============ */
+function toast(msg) {
+  const box = $('#toasts'), el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; box.appendChild(el);
+  while (box.children.length > 4) box.firstChild.remove();
+  setTimeout(() => el.remove(), 3400);
+}
+function setPlayhead(t, quiet) {
+  const dur = Math.max(duration(), 0);
+  state.playhead = q(clamp(t, 0, Math.max(dur, 0) + 0)); state.phf = state.playhead;
+  if (!quiet) { ensureVisible(); }
+  updatePlayhead(); paintViewers();
+}
+function splitClip(forced) {
+  const t = state.playhead, eps = 0.5 / FPS;
+  let target = forced || null;
+  if (!target) {
+    const s = selClip();
+    if (s && t > s.start + eps && t < s.end - eps) target = s;
+    else target = clipAt('V1', t);
+  }
+  if (!target || t <= target.start + eps || t >= target.end - eps) {
+    toast(target ? 'The playhead is on a cut. Move it inside a clip to split.' : 'No clip under the playhead to split.'); return;
+  }
+  const doSplit = c => {
+    const n = Object.assign({}, c, { id: 'c' + state.nextId++, start: t, srcIn: c.srcIn + (t - c.start) }); c.end = t; state.clips.push(n); return n;
+  };
+  const partner = target.link ? byId(target.link) : null, nt = doSplit(target);
+  if (partner && t > partner.start + eps && t < partner.end - eps) { const np = doSplit(partner); nt.link = np.id; np.link = nt.id; }
+  state.sel = null;
+  toast(`Split ${target.title ? target.title : target.name} at ${tc(t)}`); refresh();
+}
+function removeSelected(ripple) {
+  const s = selClip();
+  if (!s) { toast('Select a clip on the timeline first.'); return; }
+  const group = [s]; if (s.link && byId(s.link)) group.push(byId(s.link));
+  const gap = s.end - s.start, endT = s.end, tracks = new Set(group.map(g => g.track));
+  state.clips = state.clips.filter(c => !group.includes(c));
+  if (ripple) state.clips.forEach(c => { if (tracks.has(c.track) && c.start >= endT - 1e-6) { c.start = q(c.start - gap); c.end = q(c.end - gap); } });
+  state.sel = null;
+  toast(`${ripple ? 'Ripple deleted' : 'Deleted'} ${s.title ? s.title : s.name} (${gap.toFixed(1)} s)`);
+  refresh();
+}
+function openTitleDialog() {
+  closeDialog();
+  $('#dialog-root').innerHTML = `<div class="overlay" data-action="dlg-backdrop"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h">
+    <h2 id="dlg-h">Add Title</h2><p>Adds a 5 s title on V2 at the playhead (${tc(state.playhead)}).</p>
+    <label for="title-text">Title text</label><input class="fld text" id="title-text" data-field="title-text" value="Text" autocomplete="off" spellcheck="false" style="height:32px;font-size:13px">
+    <div class="acts"><button class="btn" data-action="dlg-cancel">Cancel</button><button class="btn primary" data-action="dlg-add">Add to Timeline</button></div></div></div>`;
+  const inp = $('#title-text'); inp.focus(); inp.select();
+}
+function closeDialog() { $('#dialog-root').innerHTML = ''; }
+function addTitle() {
+  const inp = $('#title-text'); const text = ((inp && inp.value) || '').trim() || 'Text';
+  const s = state.playhead, c = addClip({ track: 'V2', name: text, title: text, start: s, end: q(s + 5) });
+  state.sel = c.id; closeDialog(); toast(`Title "${text}" added to V2 at ${tc(s)}`); refresh();
+}
+
+/* ============ playback ============ */
+let raf = 0, lastTs = 0, meterT = 0;
+function syncPlay() {
+  $$('[data-action=play]').forEach(b => { b.innerHTML = state.playing ? I.pause + '<span>Pause</span>' : I.play + '<span>Play</span>'; b.setAttribute('aria-pressed', state.playing); });
+}
+function stopPlay() { state.playing = false; cancelAnimationFrame(raf); syncPlay(); updateMeters(); }
+function togglePlay() {
+  if (state.playing) { stopPlay(); return; }
+  const dur = duration(); if (dur <= 0) { toast('The timeline is empty.'); return; }
+  if (state.playhead >= dur - 0.04) setPlayhead(0);
+  state.playing = true; lastTs = performance.now(); syncPlay(); raf = requestAnimationFrame(tick);
+}
+function tick(now) {
+  if (!state.playing) return;
+  const dt = Math.min(0.2, (now - lastTs) / 1000); lastTs = now; state.phf += dt; const dur = duration();
+  if (state.phf >= dur) { state.phf = dur; state.playhead = q(dur); stopPlay(); updatePlayhead(); paintViewers(); return; }
+  state.playhead = q(state.phf); updatePlayhead(); paintViewers(); ensureVisible(); updateMeters(now);
+  raf = requestAnimationFrame(tick);
+}
+
+/* ============ mixer ============ */
+const STRIPS = [['A1', 'Clip audio'], ['A2', 'Music'], ['Main', 'Main bus']];
+const dbPos = db => clamp((db + 60) / 72, 0, 1) * 100;
+function buildMixer() {
+  $('#mixer').innerHTML = STRIPS.map(([k, sub]) => {
+    const marks = [12, 6, 0, -6, -12, -24, -36, -48, -60].map(d => `<span style="bottom:${dbPos(d)}%">${d > 0 ? '+' + d : d}</span>`).join('');
+    return `<div class="strip${k === 'Main' ? ' main' : ''}" data-strip="${k}" aria-label="Channel ${k} ${sub}">
+      <h3>${k === 'Main' ? 'Main' : k}<span>${k === 'A2' ? 'Music' : sub}</span></h3>
+      <div class="fader-area"><div class="scale">${marks}</div>
+        <div class="fader" data-action="fader" data-strip="${k}" title="Click on the fader to set its level"><div class="knob"></div></div>
+        <div class="meter"><div class="mbar"><i></i></div><div class="mbar"><i></i></div></div></div>
+      <div class="db-row"><input class="fld" id="mx-${k}" data-field="mix" data-strip="${k}" autocomplete="off" spellcheck="false" aria-label="${k === 'A2' ? 'A2 Music' : k} level in dB"><span class="unit">dB</span></div>
+      <div class="ms-row"><button class="btn mute" data-action="mute" data-strip="${k}" aria-pressed="false">Mute</button><button class="btn solo" data-action="solo" data-strip="${k}" aria-pressed="false">Solo</button></div>
+    </div>`;
+  }).join('') + '<div class="strip" style="width:230px;background:none;border-style:dashed"><h3>Bus</h3><p class="bus-note">A1 and A2 feed the Main bus. Mute silences a channel. Solo silences all the others.</p></div>';
+}
+function stripSilent(k) {
+  const m = state.mixer, anySolo = Object.keys(m).some(x => x !== 'Main' && m[x].solo);
+  if (m[k].mute) return true; if (k === 'Main') return false;
+  return anySolo && !m[k].solo;
+}
+function updateMeters(now) {
+  const playing = state.playing; meterT = (now || 0) / 1000;
+  $$('.strip[data-strip]').forEach(s => {
+    const k = s.dataset.strip, bars = $$('.mbar i', s); let lvl = 0;
+    if (playing && !stripSilent(k)) {
+      const trackLive = k === 'Main' ? true : state.clips.some(c => c.track === k && state.playhead >= c.start && state.playhead < c.end);
+      if (trackLive) {
+        const sig = k === 'A2' ? -20 : -14, extra = k === 'Main' ? 0 : 0;
+        bars.forEach((b, i) => {
+          const noise = -9 * Math.abs(Math.sin(meterT * (7 + i * 1.7) + i)) - 4 * Math.random();
+          const db = sig + noise + state.mixer[k].db + extra + (k === 'Main' ? 0 : 0);
+          b.style.height = (100 - dbPos(db)) + '%';
+        }); return;
+      }
+    }
+    bars.forEach(b => { b.style.height = '100%'; });
+  });
+}
+function refreshMixer() {
+  $$('.strip[data-strip]').forEach(s => {
+    const k = s.dataset.strip, m = state.mixer[k];
+    $('.knob', s).style.bottom = dbPos(m.db) + '%';
+    const f = $('input', s); if (document.activeElement !== f) f.value = fmtDb(m.db);
+    const mu = $('.mute', s), so = $('.solo', s);
+    mu.classList.toggle('on', m.mute); mu.setAttribute('aria-pressed', m.mute);
+    so.classList.toggle('on', m.solo); so.setAttribute('aria-pressed', m.solo);
+  });
+  updateMeters();
+}
+function setDb(k, v) {
+  v = clamp(Math.round(v * 10) / 10, -60, 12);
+  if (state.mixer[k].db === v) return false;
+  state.mixer[k].db = v; return true;
+}
+
+/* ============ colour page ============ */
+const COLOR_FIELDS = [['temp', 'Temp', -100, 100], ['tint', 'Tint', -100, 100], ['contrast', 'Contrast', 0, 100], ['saturation', 'Saturation', 0, 100], ['hue', 'Hue', 0, 100]];
+function buildColor() {
+  $('#wheels').innerHTML = ['lift', 'gamma', 'gain'].map(w => `<div class="wbox"><div class="wt">${w[0].toUpperCase() + w.slice(1)}</div>
+    <div class="wheel" data-action="wheel" data-wheel="${w}" role="img" aria-label="${w} colour wheel, click to move the dot"><div class="cross"></div><div class="dot"></div></div>
+    <div class="wv" data-wv="${w}"></div><button class="btn" data-action="wheel-reset" data-wheel="${w}">Reset ${w}</button></div>`).join('');
+  $('#pf').innerHTML = COLOR_FIELDS.map(([k, label]) => `<div><label for="col-${k}">${label}</label><input class="fld" id="col-${k}" data-field="col" data-key="${k}" autocomplete="off" spellcheck="false"></div>`).join('');
+  $('#gallery').innerHTML = Object.keys(LOOKS).map(n => `<button class="still" data-action="look" data-look="${n}" aria-pressed="false"><canvas width="160" height="90"></canvas><span>${n}</span></button>`).join('');
+  $$('#gallery .still').forEach(b => {
+    const cv = $('canvas', b), c = cv.getContext('2d', { willReadFrequently: true }); drawMedia(c, 160, 90, 'Lisbon_intro.mp4', 3);
+    gradeImage(c, 160, 90, LOOKS[b.dataset.look]);
+  });
+}
+function refreshColor() {
+  const col = state.color;
+  COLOR_FIELDS.forEach(([k]) => { const f = $('#col-' + k); if (f && document.activeElement !== f) f.value = fmtNum(col[k]); });
+  ['lift', 'gamma', 'gain'].forEach(w => {
+    const dot = $(`.wheel[data-wheel=${w}] .dot`); dot.style.left = (50 + col[w].x * 50) + '%'; dot.style.top = (50 - col[w].y * 50) + '%';
+    $(`[data-wv=${w}]`).textContent = `x ${col[w].x.toFixed(2)}  y ${col[w].y.toFixed(2)}`;
+  });
+  $$('#gallery .still').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === col.look));
+  $('#look-name').textContent = col.look;
+}
+function applyLook(n) { state.color = Object.assign(copyLook(n), { look: n }); refresh(); toast(`Look applied: ${n}`); }
+
+/* ============ deliver page ============ */
+function buildDeliver() {
+  $('#presets').innerHTML = Object.keys(PRESETS).map(n => `<button class="preset" data-action="preset" data-preset="${n}" aria-pressed="false"><span>${n}</span><small>${PRESETS[n].note}</small></button>`).join('');
+}
+function refreshDeliver() {
+  const d = state.deliver, p = PRESETS[d.preset];
+  $$('.preset').forEach(b => b.setAttribute('aria-pressed', b.dataset.preset === d.preset));
+  $('#dl-format').textContent = p.fmt; $('#dl-codec').textContent = p.codec; $('#dl-res').textContent = p.res;
+  const qEl = $('#queue');
+  qEl.innerHTML = d.queue.length ? d.queue.map(j => `<div class="job${j.status === 'Complete' ? ' done' : ''}" data-job="${j.id}">
+      <div class="job-top"><b>${esc(j.filename)}.${j.ext}</b><span>${j.status === 'Rendering' ? 'Rendering ' + j.progress + '%' : j.status === 'Complete' ? 'Complete' : 'Queued'}</span></div>
+      <small>${esc(j.preset)} · ${esc(j.res)} · ${tc(j.length)}</small>
+      <div class="bar"><i style="width:${j.progress}%"></i></div></div>`).join('') + (d.published ? '<p class="q-status" style="color:var(--ok)">Published to YouTube (fake)</p>' : '')
+    : '<div class="q-empty">The render queue is empty. Pick a preset and click Add to Render Queue.</div>';
+  const busy = d.status === 'rendering', anyDone = d.queue.some(j => j.status === 'Complete');
+  $('#btn-start').disabled = busy; $('#btn-clear').disabled = busy; $('#btn-publish').disabled = busy || !anyDone; $('#btn-publish').classList.toggle('primary', !busy && anyDone);
+  $('#q-status').textContent = d.status === 'rendering' ? 'Rendering…' : d.status === 'complete' ? 'Render complete' : 'Idle';
+}
+let renderTimer = 0;
+function startRender() {
+  const d = state.deliver;
+  if (d.status === 'rendering') return;
+  if (!d.queue.length) { toast('The render queue is empty. Add a job first.'); return; }
+  const jobs = d.queue.filter(j => j.status === 'Queued');
+  if (!jobs.length) { toast('No queued jobs to render.'); return; }
+  d.status = 'rendering'; let i = 0, t0 = Date.now();
+  clearInterval(renderTimer);
+  renderTimer = setInterval(() => {
+    const j = jobs[i], p = Math.min(1, (Date.now() - t0) / 4000);
+    j.status = 'Rendering'; j.progress = Math.round(p * 100);
+    if (p >= 1) {
+      j.status = 'Complete'; j.progress = 100; i++; t0 = Date.now();
+      if (i >= jobs.length) { clearInterval(renderTimer); d.status = 'complete'; toast('Render complete'); }
+    }
+    refreshDeliver();
+  }, 100);
+  toast('Render started'); refreshDeliver();
+}
+
+/* ============ inspector, media, overview ============ */
+function insTargets() {
+  const s = selClip(); if (!s) return { v: null, a: null, label: 'No clip selected' };
+  const lk = s.link ? byId(s.link) : null;
+  if (s.track === 'V1') return { v: s, a: 'A1', label: s.name };
+  if (s.track === 'A1') return { v: lk, a: 'A1', label: s.name };
+  if (s.track === 'A2') return { v: null, a: 'A2', label: s.name };
+  return { v: null, a: null, label: s.title + ' (title)' };
+}
+function refreshInspector() {
+  const tg = insTargets(), v = tg.v;
+  $('#insp-target').textContent = tg.label;
+  $$('[data-action=insp-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === state.inspTab));
+  $('#insp-video').hidden = state.inspTab !== 'video'; $('#insp-audio').hidden = state.inspTab !== 'audio';
+  $('#insp-note').textContent = v ? 'Video settings for ' + v.name : tg.label === 'No clip selected' ? 'Select a clip on the timeline to edit it.' : 'This clip has no video settings.';
+  $('#insp-note-a').textContent = tg.a ? `Audio settings for ${tg.label} (track ${tg.a}${tg.a === 'A2' ? ', Music' : ''}).` : 'Select an audio clip to set its volume.';
+  const set = (id, val, on) => { const f = $(id); f.disabled = !on; if (document.activeElement !== f) f.value = on ? val : ''; };
+  set('#f-zoom', v ? fmtNum(v.zoom) : '', !!v); set('#f-posx', v ? fmtNum(v.posX) : '', !!v); set('#f-posy', v ? fmtNum(v.posY) : '', !!v);
+  set('#f-opacity', v ? fmtNum(v.opacity) : '', !!v);
+  set('#f-vol', tg.a ? fmtDb(state.mixer[tg.a].db) : '', !!tg.a);
+  const s = selClip();
+  $('#tl-sel').innerHTML = s ? `Selected: <b>${esc(s.title || s.name)}</b> ${s.track} · ${tc(s.start)} to ${tc(s.end)}` : 'Nothing selected';
+}
+function poolHTML() {
+  return state.media.map(m => `<button class="tile" data-action="media-select" data-name="${m.name}" aria-pressed="${state.mediaSel === m.name}">
+    <img class="thumb" alt="" src="${THUMBS[m.name]}"><span class="tname">${m.name}</span><span class="tmeta">${m.kind === 'audio' ? 'Audio' : 'Video'} · ${Math.floor(m.dur / 60)}:${String(m.dur % 60).padStart(2, '0')}</span></button>`).join('');
+}
+function refreshMedia() {
+  $$('[data-slot^=pool-]').forEach(el => { el.innerHTML = poolHTML(); });
+  const m = mediaOf(state.mediaSel) || state.media[0];
+  $('#md').innerHTML = `<dt>Name</dt><dd>${m.name}</dd><dt>Type</dt><dd>${m.kind === 'audio' ? 'Audio' : 'Video'}</dd><dt>Duration</dt><dd>${tc(m.dur)}</dd><dt>Format</dt><dd>${m.res}</dd><dt>Codec</dt><dd>${m.codec}</dd><dt>Frame rate</dt><dd>${m.kind === 'audio' ? '-' : '25 fps'}</dd>`;
+  $('#cut-src-name').textContent = m.name;
+}
+function refreshOverview() {
+  const dur = Math.max(duration(), 1);
+  $('#overview').innerHTML = state.clips.filter(c => c.track === 'V1').map(c => `<i style="left:${c.start / dur * 100}%;width:${(c.end - c.start) / dur * 100}%" title="${c.name}"></i>`).join('') + '<div class="oph"></div>';
+}
+
+/* ============ pages + refresh ============ */
+function setPage(p) {
+  state.page = p;
+  $$('.page').forEach(el => { el.hidden = el.dataset.page !== p; });
+  $$('.pagebtn').forEach(b => b.removeAttribute('aria-current')); $(`.pagebtn[data-page=${p}]`).setAttribute('aria-current', 'page');
+  refresh(); fitViewers(); paintViewers();
+}
+function refresh() {
+  renderTimelines(); refreshInspector(); refreshMixer(); refreshColor(); refreshDeliver(); refreshMedia(); refreshOverview();
+  $$('[data-action=tool]').forEach(b => { b.classList.toggle('on', b.dataset.tool === state.tool); b.setAttribute('aria-pressed', b.dataset.tool === state.tool); });
+  $$('[data-action=pool-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === state.poolTab));
+  $('#pool-body').hidden = state.poolTab !== 'pool'; $('#fx-body').hidden = state.poolTab !== 'fx';
+  updatePlayhead(); fitViewers(); paintViewers();
+}
+
+/* ============ field commits ============ */
+function commitField(inp) {
+  const f = inp.dataset.field, val = inp.value;
+  switch (f) {
+    case 'tc': {
+      if (!val.trim()) { inp.value = tc(state.playhead); return; }
+      const t = parseTC(val);
+      if (t === null) { toast('Timecode not understood. Try 00:00:22:00, 0:22 or 22.'); inp.value = tc(state.playhead); return; }
+      const dur = duration(), tt = q(Math.min(t, Math.max(dur, 0)));
+      if (t > dur + 0.001) toast(`Past the end. Moved to ${tc(tt)}.`);
+      setPlayhead(tt); inp.value = tc(state.playhead); break;
+    }
+    case 'zoom': case 'posx': case 'posy': case 'opacity': {
+      const v = insTargets().v, n = parseNum(val); if (!v) return;
+      if (n === null) { refreshInspector(); return; }
+      if (f === 'zoom') v.zoom = clamp(n, 0.1, 5); if (f === 'posx') v.posX = clamp(n, -1920, 1920); if (f === 'posy') v.posY = clamp(n, -1080, 1080); if (f === 'opacity') v.opacity = clamp(n, 0, 100);
+      refresh(); break;
+    }
+    case 'vol': case 'mix': {
+      const k = f === 'mix' ? inp.dataset.strip : insTargets().a; if (!k) return;
+      const n = parseNum(val); if (n === null) { toast('Enter the level as a number in dB, for example -18.'); refresh(); return; }
+      if (setDb(k, n)) toast(`${k === 'A2' ? 'A2 Music' : k} level set to ${fmtDb(state.mixer[k].db)} dB`);
+      inp.value = fmtDb(state.mixer[k].db); refresh(); break;
+    }
+    case 'col': {
+      const key = inp.dataset.key, spec = COLOR_FIELDS.find(x => x[0] === key), n = parseNum(val);
+      if (n === null) { refreshColor(); return; }
+      const v = clamp(n, spec[2], spec[3]);
+      if (state.color[key] !== v) { state.color[key] = v; state.color.look = 'Custom'; toast(`${spec[1]} set to ${fmtNum(v)}`); }
+      inp.value = fmtNum(state.color[key]); refresh(); break;
+    }
+    case 'title-text': addTitle(); break;
+  }
+}
+
+/* ============ events ============ */
+document.addEventListener('click', e => {
+  if (e.target.closest('.tl-scroll')) { timelineClick(e); return; }
+  if (e.target.closest('#overview')) {
+    const r = $('#overview').getBoundingClientRect(); setPlayhead(q((e.clientX - r.left) / r.width * Math.max(duration(), 1))); return;
+  }
+  const el = e.target.closest('[data-action]'); if (!el) return;
+  const a = el.dataset.action;
+  switch (a) {
+    case 'page': setPage(el.dataset.page); break;
+    case 'menu': toast(`${el.dataset.menu}: not part of this demo.`); break;
+    case 'tool': state.tool = el.dataset.tool; refresh(); break;
+    case 'split': splitClip(); break;
+    case 'delete': removeSelected(false); break;
+    case 'ripple': removeSelected(true); break;
+    case 'add-title': openTitleDialog(); break;
+    case 'dlg-add': addTitle(); break;
+    case 'dlg-cancel': closeDialog(); break;
+    case 'dlg-backdrop': if (e.target === el) closeDialog(); break;
+    case 'play': togglePlay(); break;
+    case 'go-start': setPlayhead(0); break;
+    case 'go-end': setPlayhead(duration()); break;
+    case 'step-back': setPlayhead(state.playhead - 1 / FPS); break;
+    case 'step-fwd': setPlayhead(state.playhead + 1 / FPS); break;
+    case 'pool-tab': state.poolTab = el.dataset.tab; refresh(); break;
+    case 'insp-tab': state.inspTab = el.dataset.tab; refresh(); break;
+    case 'fx-item': if (el.dataset.fx === 'Text') openTitleDialog(); else toast(`${el.dataset.fx} is not wired up in this demo. Try Text.`); break;
+    case 'media-select': state.mediaSel = el.dataset.name; refresh(); break;
+    case 'import':
+      if (state.media.some(m => m.name === IMPORT_ITEM.name)) toast(`${IMPORT_ITEM.name} is already in the media pool.`);
+      else { state.media.push(IMPORT_ITEM); state.mediaSel = IMPORT_ITEM.name; refresh(); toast(`Imported ${IMPORT_ITEM.name}`); }
+      break;
+    case 'mute': state.mixer[el.dataset.strip].mute = !state.mixer[el.dataset.strip].mute; refresh(); break;
+    case 'solo': state.mixer[el.dataset.strip].solo = !state.mixer[el.dataset.strip].solo; refresh(); break;
+    case 'fader': {
+      const r = el.getBoundingClientRect(), frac = clamp(1 - (e.clientY - r.top) / r.height, 0, 1), k = el.dataset.strip;
+      if (setDb(k, frac * 72 - 60)) toast(`${k === 'A2' ? 'A2 Music' : k} level set to ${fmtDb(state.mixer[k].db)} dB`);
+      refresh(); break;
+    }
+    case 'look': applyLook(el.dataset.look); break;
+    case 'wheel': {
+      const r = el.getBoundingClientRect(), rad = r.width / 2;
+      let x = (e.clientX - r.left - rad) / rad, y = -(e.clientY - r.top - rad) / rad; const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; }
+      state.color[el.dataset.wheel] = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }; state.color.look = 'Custom'; refresh(); break;
+    }
+    case 'wheel-reset': state.color[el.dataset.wheel] = { x: 0, y: 0 }; state.color.look = 'Custom'; refresh(); break;
+    case 'color-reset': applyLook('Neutral'); break;
+    case 'preset': state.deliver.preset = el.dataset.preset; refresh(); break;
+    case 'queue-add': {
+      const d = state.deliver, p = PRESETS[d.preset], fn = ($('#dl-filename').value.trim() || 'Lisbon_in_3_days').replace(/[\/\\:]/g, '_');
+      d.queue.push({ id: d.nextJob++, filename: fn, preset: d.preset, ext: p.ext, res: p.res, length: duration(), progress: 0, status: 'Queued' });
+      if (d.status === 'complete') d.status = 'idle';
+      toast(`Added to the render queue: ${fn}.${p.ext} (${d.preset})`); refresh(); break;
+    }
+    case 'render-start': startRender(); break;
+    case 'queue-clear': state.deliver.queue = []; state.deliver.status = 'idle'; state.deliver.published = false; refresh(); toast('Render queue cleared'); break;
+    case 'publish':
+      if (!state.deliver.queue.some(j => j.status === 'Complete')) { toast('Render a job first.'); break; }
+      state.deliver.published = true; refresh(); toast('Published to YouTube (fake)'); break;
+  }
+});
+document.addEventListener('change', e => { const i = e.target; if (i.dataset && i.dataset.field && i.dataset.field !== 'title-text') commitField(i); });
+document.addEventListener('keydown', e => {
+  const t = e.target, typing = t.matches && t.matches('input,textarea,select,[contenteditable]');
+  if (typing) {
+    if (e.key === 'Enter' && t.dataset.field) { e.preventDefault(); commitField(t); if (t.dataset.field !== 'title-text') t.blur(); }
+    else if (e.key === 'Escape') { if ($('#dialog-root').firstChild) closeDialog(); else { t.blur(); refresh(); } }
+    return;
+  }
+  if (e.key === 'Escape') { closeDialog(); return; }
+  if ($('#dialog-root').firstChild) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); splitClip(); }
+  else if (mod || e.altKey) return;
+  else if (e.key === 'Backspace') { e.preventDefault(); removeSelected(false); }
+  else if (e.key === 'Delete') { e.preventDefault(); removeSelected(true); }
+  else if (e.key === ' ' && !(t.matches && t.matches('button,a'))) { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); setPlayhead(state.playhead - 1 / FPS); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); setPlayhead(state.playhead + 1 / FPS); }
+  else if (e.key === 'Home') { e.preventDefault(); setPlayhead(0); }
+  else if (e.key === 'End') { e.preventDefault(); setPlayhead(duration()); }
+});
+// Select the whole value when a number box gets focus, so typed text replaces it.
+let justFocused = null;
+document.addEventListener('focusin', e => { const i = e.target; if (i.matches && i.matches('input.fld')) { i.select(); justFocused = i; } });
+document.addEventListener('mouseup', e => { if (justFocused && e.target === justFocused) { e.preventDefault(); } justFocused = null; }, true);
+window.addEventListener('resize', () => { fitViewers(); paintViewers(); });
+
+/* ============ boot ============ */
+function init() {
+  makeThumbs();
+  $('#menus').innerHTML = ['File', 'Edit', 'Trim', 'Timeline', 'Clip', 'Mark', 'View', 'Playback', 'Fairlight', 'Workspace', 'Help'].map(m => `<button data-action="menu" data-menu="${m} menu">${m}</button>`).join('');
+  $('#pages').innerHTML = PAGES.map(([k, n]) => `<button class="pagebtn" data-action="page" data-page="${k}" aria-label="${n} page">${PAGE_ICONS[k]}<span>${n}</span></button>`).join('');
+  $$('[data-slot=transport]').forEach(el => {
+    el.innerHTML = `<button class="btn" data-action="go-start" title="Go to start (Home)">${I.start}<span>Start</span></button>
+      <button class="btn" data-action="step-back" title="Back one frame (Left arrow)">${I.back}<span>Frame</span></button>
+      <button class="btn" data-action="play" title="Play / pause (Space)">${I.play}<span>Play</span></button>
+      <button class="btn" data-action="step-fwd" title="Forward one frame (Right arrow)"><span>Frame</span>${I.fwd}</button>
+      <button class="btn" data-action="go-end" title="Go to end (End)"><span>End</span>${I.end}</button>
+      <span class="spacer"></span>
+      <span class="tcread"><span class="muted">Playhead</span><b data-bind="tc">00:00:00:00</b></span>
+      <span class="tcread dur"><span class="muted">Duration</span><b data-bind="dur" style="color:var(--muted)">00:01:00:00</b></span>`;
+  });
+  buildTimelines(); buildMixer(); buildColor(); buildDeliver();
+  if (window.ResizeObserver) { const ro = new ResizeObserver(() => { fitViewers(); paintViewers(); }); $$('.vfit').forEach(v => ro.observe(v)); }
+  syncPlay(); setPage('edit');
+}
+init();
+
+/* ============ test hook ============ */
+window.gradeStudio = {
+  getState() {
+    const order = { V2: 0, V1: 1, A1: 2, A2: 3 }, s = selClip(), m = state.mixer;
+    return JSON.parse(JSON.stringify({
+      page: state.page, tool: state.tool, playhead: r2(state.playhead), playheadTimecode: tc(state.playhead),
+      duration: r2(duration()), durationTimecode: tc(duration()),
+      selected: s ? { track: s.track, name: s.title || s.name, start: r2(s.start), end: r2(s.end) } : null,
+      clips: state.clips.slice().sort((a, b) => order[a.track] - order[b.track] || a.start - b.start)
+        .map(c => ({ track: c.track, name: c.name, start: r2(c.start), end: r2(c.end) })),
+      titles: state.clips.filter(c => c.track === 'V2').map(c => ({ text: c.title, start: r2(c.start), end: r2(c.end) })),
+      color: { look: state.color.look, temp: state.color.temp, tint: state.color.tint, contrast: state.color.contrast, saturation: state.color.saturation, hue: state.color.hue, lift: state.color.lift, gamma: state.color.gamma, gain: state.color.gain },
+      musicVolumeDb: m.A2.db,
+      mixer: { A1: m.A1, A2: m.A2, Main: m.Main },
+      mediaPool: state.media.map(x => x.name),
+      render: { preset: state.deliver.preset, status: state.deliver.status, published: state.deliver.published,
+        queue: state.deliver.queue.map(j => ({ filename: j.filename + '.' + j.ext, preset: j.preset, progress: j.progress, status: j.status })) },
+    }));
+  },
+};
+
+// The tour button follows Brah: Brah reports its tour state on a read-only local address.
+(function followBrah() {
+  const button = document.getElementById('watch-brah');
+  const line = document.getElementById('brah-state');
+  async function poll() {
+    try {
+      const s = await (await fetch('http://127.0.0.1:47719/tour', { cache: 'no-store' })).json();
+      button.classList.toggle('running', s.running);
+      button.href = s.running ? 'brah://stop' : 'brah://tour';
+      button.textContent = s.running ? `Step ${s.step} of ${s.total} · Stop` : s.finished ? 'Watch again' : 'Watch Brah do it';
+      line.textContent = s.running ? `Brah: ${s.doing || s.question}` : s.busy ? 'Brah is busy' : '';
+    } catch {
+      button.classList.remove('running');
+      button.href = 'brah://tour';
+      button.textContent = 'Watch Brah do it';
+      line.textContent = 'Brah is not running';
+    }
+  }
+  poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>
