@@ -4,10 +4,13 @@
 
 > **Ho, brah.** Your mate next to the cursor.
 
-Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer on the
-Mac. Hold a key or say **"Hey Brah"**, ask about whatever is on your screen, and your own AI agent
-answers out loud and points at the thing. Ask it to do the thing, and it does. After you say yes.
-Not before.
+**A voice AI assistant for macOS that sees your screen.** Hold a key or say **"Hey Brah"**, ask
+about whatever is on your screen, and your own AI answers out loud and points at the thing with
+its own cursor. Ask it to do the thing, and it clicks and types for you. After you say yes. Not
+before. Works with Claude, Ollama and Hermes. Native app for macOS 14 or later, free for
+personal use.
+
+Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer.
 
 **Bruh** is the face you make when the Export button was right there all along.
 **Brah** is the mate who points at it.
@@ -153,7 +156,7 @@ Open **Settings** from the Brah menu (or press ⌘,). The AI tab picks the provi
 | Claude subscription | Claude Code installed and signed in. Brah runs it with its tools off. |
 | Anthropic API | An API key from console.anthropic.com. |
 | OpenAI-compatible | A server address such as `http://localhost:11434/v1` (Ollama), and a key if it needs one. |
-| Hermes | See below. The only one that can click for you today. |
+| Hermes | See below. Hermes and both Claude routes can click for you today. |
 
 Both Claude routes start on Haiku 5.5 at medium effort. Change the model and the effort in
 Settings, or the effort from the menu in the middle of a conversation. **Check** tests the key
