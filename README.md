@@ -41,18 +41,25 @@ same tours yourself.
 
 Six tasks on the [benchmark page](demo/benchmark.html). Brah reads the dashboard, opens tabs,
 changes the date range, starts a campaign, then finds an order and stops to ask before it sends
-the invoice. [Download it at full speed (MP4, 2.5 minutes)](https://github.com/rezaulhreza/brah/raw/main/docs/demo.mp4).
+the invoice.
 
 ### Edit a video
 
+The same kind of job in two video editors, with the ChatGPT subscription. Both are made-up apps
+that look like the editors people use every day.
+
 ![Brah in a Resolve-style editor: it adds a title, sets the music, warms the colour and renders](docs/demo-grade-studio.gif)
 
-The same kind of job in a video editor, with the ChatGPT subscription. Grade Studio is a made-up
-app that looks like a Resolve-style editor. Brah adds a title, lowers the music in the mixer,
-warms the colour on the Color page, then renders for YouTube and publishes.
-[Download it at full speed (MP4, 2.8 minutes)](https://github.com/rezaulhreza/brah/raw/main/docs/demo-grade-studio.mp4).
-Try it yourself: open [`demo/grade-studio.html`](demo/grade-studio.html), or the Premiere-style
-[`demo/cutline.html`](demo/cutline.html), in a browser and click **Watch Brah do it**.
+**Grade Studio** looks like a Resolve-style editor. Brah adds a title, lowers the music in the
+mixer, warms the colour on the Color page, then renders for YouTube and publishes.
+
+![Brah in a Premiere-style editor: it finds the controls and walks through the edit](docs/demo-cutline.gif)
+
+**Cutline Pro** looks like a Premiere-style editor. Brah finds the timeline, the title tool, the
+music and the colour controls, and shows each step.
+
+Try it yourself: open [`demo/grade-studio.html`](demo/grade-studio.html) or
+[`demo/cutline.html`](demo/cutline.html) in a browser and click **Watch Brah do it**.
 
 Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer. Text to
 speech voices cannot say *bruh* the right way either, and an assistant that talks should be able
