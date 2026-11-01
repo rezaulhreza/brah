@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingAction: CheckedContinuation<ScreenActions.Approval, Never>?
     private var touring = false
     private var tourStep = 0
+    private var tourQuestions: [String] = []
     private var tourFinished = false
     private var statusServer: StatusServer?
     private let recorder = Recorder()
@@ -1059,15 +1060,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: Tour
 
 extension AppDelegate {
-    /// The questions of the hands-free tour of `demo/benchmark.html`. They live here, not in the
-    /// page, so a web page cannot give Brah instructions.
-    static let tour = [
-        "What is this page? Show me its main parts.",
-        "Open Growth, then the Revenue tab. Which month had the highest revenue? Show me on the chart.",
-        "Switch the date range to Last 90 days.",
-        "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
-        "Create a campaign named Winter Push for Trial users, and launch it.",
-        "Find order #1024 and send its invoice. I already said yes, so finish it.",
+    /// The hands-free tours of the demo pages in `demo/`, by the start of the page's window title.
+    /// The questions live here, not in the pages, so a web page cannot give Brah instructions.
+    static let tours: [(page: String, questions: [String])] = [
+        ("Brah benchmark", [
+            "What is this page? Show me its main parts.",
+            "Open Growth, then the Revenue tab. Which month had the highest revenue? Show me on the chart.",
+            "Switch the date range to Last 90 days.",
+            "Open Growth, then the Retention tab. Which cohort keeps the most users at month 3?",
+            "Create a campaign named Winter Push for Trial users, and launch it.",
+            "Find order #1024 and send its invoice. I already said yes, so finish it.",
+        ]),
+        ("Brah demo · Cutline Pro", [
+            "What is this editing app? Show me the timeline, the preview and the colour panel.",
+            "Cut out the shaky part of the Market_walk clip from 0:22 to 0:27 and close the gap.",
+            "Add the title Lisbon in 3 days at the very start.",
+            "The music is too loud. Set the music to minus 18 dB.",
+            "Make the picture warmer: set Temperature to 20 and Saturation to 115.",
+            "Export for YouTube 1080p, then publish it. I already said yes, so finish it.",
+        ]),
+        ("Brah demo · Grade Studio", [
+            "What is this editing app? Show me the pages at the bottom, the timeline and the viewer.",
+            "Cut out the shaky part of the Market_walk clip from 0:22 to 0:27 and close the gap.",
+            "Add the title Lisbon in 3 days at the very start.",
+            "Go to the Fairlight page and set the music to minus 18 dB.",
+            "Go to the Color page and make the picture warmer: set Temp to 20 and Saturation to 60.",
+            "Go to the Deliver page, choose YouTube 1080p, add it to the render queue, start the render and publish it. I already said yes, so finish it.",
+        ]),
     ]
 
     /// `brah://tour` and `brah://stop` from the benchmark page's tour button.
@@ -1094,8 +1113,8 @@ extension AppDelegate {
     /// What the benchmark page shows on its tour button.
     func tourStatus() -> Data {
         let status: [String: Any] = [
-            "running": touring, "step": tourStep, "total": Self.tour.count,
-            "question": touring && tourStep > 0 ? Self.tour[tourStep - 1] : "",
+            "running": touring, "step": tourStep, "total": tourQuestions.count,
+            "question": touring && tourStep > 0 ? tourQuestions[tourStep - 1] : "",
             "doing": touring ? bubble.model.step ?? "" : "", "finished": tourFinished, "busy": work != nil,
         ]
         return (try? JSONSerialization.data(withJSONObject: status)) ?? Data()
@@ -1105,17 +1124,18 @@ extension AppDelegate {
         touring = true
         defer { touring = false }
         try? await Task.sleep(for: .seconds(1.5))
-        // Only on the benchmark page: on any other screen the fixed steps could do real things.
-        guard let title = Self.topWindowTitle(), title.contains("Brah benchmark") else {
-            log("tour: refused, the top window is \(Self.topWindowTitle().map { "\"\($0)\"" } ?? "not known"), not the Brah benchmark page")
+        // Only on a demo page: on any other screen the fixed steps could do real things.
+        guard let title = Self.topWindowTitle(), let tour = Self.tours.first(where: { title.contains($0.page) }) else {
+            log("tour: refused, the top window is \(Self.topWindowTitle().map { "\"\($0)\"" } ?? "not known"), not a Brah demo page")
             return
         }
-        log("tour: start")
+        tourQuestions = tour.questions
+        log("tour: start (\(tour.page))")
         tourFinished = false
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         // Bottom left, over the page's sidebar, away from the buttons the tour clicks.
         let corner = screen.map { CGPoint(x: $0.visibleFrame.minX + 2, y: $0.visibleFrame.minY + 260) } ?? NSEvent.mouseLocation
-        for (index, question) in Self.tour.enumerated() {
+        for (index, question) in tourQuestions.enumerated() {
             guard touring else { return }
             tourStep = index + 1
             capture = Task { try await Capture.snapshot() }
