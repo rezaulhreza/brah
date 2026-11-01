@@ -15,6 +15,20 @@ personal use.
 **[Watch the promo with sound (MP4, 57 seconds)](https://github.com/rezaulhreza/brah/blob/main/docs/promo.mp4).** The picture above is
 silent. The film has music and sound effects.
 
+## Contents
+
+- [Brah at work](#brah-at-work)
+- [What it does](#what-it-does)
+- [Screen actions](#screen-actions)
+- [Run it](#run-it)
+- [Pick your AI](#pick-your-ai)
+- [Connect Hermes](#connect-hermes)
+- [Voice](#voice)
+- [Roadmap](#roadmap)
+- [Icons](#icons)
+- [Test](#test)
+- [Licence](#licence)
+
 ## Brah at work
 
 Each demo is a use case. Both are recorded at 2x speed, with no sound. In real use, Brah says
