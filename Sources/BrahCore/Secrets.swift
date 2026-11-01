@@ -13,6 +13,8 @@ public enum Secrets {
     public static let accessClientSecret = "cf-access.client-secret"
     public static let anthropicKey = "anthropic.key"
     public static let customKey = "custom.key"
+    /// The ChatGPT sign-in: tokens as JSON.
+    public static let chatgptAuth = "chatgpt.auth"
     public static let deepgramKey = "deepgram.key"
     public static let groqKey = "groq.key"
 

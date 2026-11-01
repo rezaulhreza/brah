@@ -250,3 +250,227 @@ final class MCPTests: XCTestCase {
         XCTAssertTrue(args[args.firstIndex(of: "--mcp-config")! + 1].contains(#""url":"http://127.0.0.1:5000/mcp""#))
     }
 }
+
+final class ChatGPTTests: XCTestCase {
+    let snapshot = Snapshot(jpeg: Data([1, 2, 3]), imageSize: CGSize(width: 10, height: 10), screenFrame: .zero, scale: 1,
+                            cursor: .zero, appName: nil, windowTitle: nil)
+
+    /// A token with the claims that ChatGPT puts in its ID token.
+    func jwt(_ claims: [String: Any]) -> String {
+        let payload = (try? JSONSerialization.data(withJSONObject: claims)) ?? Data()
+        return "e30.\(payload.base64URL).sig"
+    }
+
+    func tokens(access: String = "access", refresh: String = "refresh", expiresAt: Date = Date().addingTimeInterval(3600)) -> ChatGPTTokens {
+        ChatGPTTokens(accessToken: access, refreshToken: refresh, idToken: nil, expiresAt: expiresAt, accountID: "acct",
+                      email: "rez@example.com", plan: "plus")
+    }
+
+    func testSettingsKnowChatGPT() {
+        XCTAssertEqual(ProviderKind(rawValue: "chatgpt"), .chatgpt)
+        var settings = ProviderSettings()
+        settings.active = .chatgpt
+        settings.chatgpt = ModelChoice(model: "gpt-x", effort: .high)
+        XCTAssertEqual(settings.effort, .high)
+        settings.effort = .low
+        let back = ProviderSettings(json: settings.applied(to: [:]))
+        XCTAssertEqual(back.active, .chatgpt)
+        XCTAssertEqual(back.chatgpt, ModelChoice(model: "gpt-x", effort: .low))
+    }
+
+    func testPKCEMatchesTheRFCExample() {
+        let pkce = ChatGPTAuth.PKCE(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+        XCTAssertEqual(pkce.challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        XCTAssertNotEqual(ChatGPTAuth.PKCE().verifier, ChatGPTAuth.PKCE().verifier)
+    }
+
+    func testAuthorizeURL() throws {
+        let url = ChatGPTAuth.authorizeURL(redirectURI: ChatGPTAuth.redirectURI(port: 1455), challenge: "C", state: "S")
+        XCTAssertEqual(url.host, "auth.openai.com")
+        let items = Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(items["redirect_uri"], "http://localhost:1455/auth/callback")
+        XCTAssertEqual(items["code_challenge_method"], "S256")
+        XCTAssertEqual(items["client_id"], ChatGPTAuth.clientID)
+        XCTAssertEqual(items["state"], "S")
+        XCTAssertTrue(items["scope"]?.contains("offline_access") == true)
+    }
+
+    func testCallback() {
+        XCTAssertEqual(ChatGPTAuth.callback(path: "/auth/callback?code=abc&state=S", state: "S"), .code("abc"))
+        XCTAssertEqual(ChatGPTAuth.callback(path: "/auth/callback?code=abc&state=other", state: "S"), .ignore)
+        XCTAssertEqual(ChatGPTAuth.callback(path: "/favicon.ico", state: "S"), .ignore)
+        XCTAssertEqual(ChatGPTAuth.callback(path: "/auth/callback?error=access_denied&error_description=No&state=S", state: "S"),
+                       .failed(.denied("No")))
+    }
+
+    func testTokensCarryTheAccountAndKeepOldValuesOnRefresh() throws {
+        let id = jwt(["email": "rez@example.com",
+                      "https://api.openai.com/auth": ["chatgpt_account_id": "acct-1", "chatgpt_plan_type": "pro"]])
+        let first = try ChatGPTAuth.tokens(from: ["access_token": "a1", "refresh_token": "r1", "id_token": id, "expires_in": 3600.0],
+                                           previous: nil, now: Date(timeIntervalSince1970: 1000))
+        XCTAssertEqual(first.accountID, "acct-1")
+        XCTAssertEqual(first.email, "rez@example.com")
+        XCTAssertEqual(first.plan, "pro")
+        XCTAssertEqual(first.expiresAt, Date(timeIntervalSince1970: 4600))
+
+        let second = try ChatGPTAuth.tokens(from: ["access_token": "a2"], previous: first)
+        XCTAssertEqual(second.refreshToken, "r1")
+        XCTAssertEqual(second.accountID, "acct-1")
+        XCTAssertEqual(second.email, "rez@example.com")
+
+        XCTAssertThrowsError(try ChatGPTAuth.tokens(from: ["access_token": "a"], previous: nil))
+        XCTAssertTrue(tokens(expiresAt: Date().addingTimeInterval(60)).expires(within: 300))
+    }
+
+    func testRequestForTheCodexEndpoint() throws {
+        let transcript = { () -> Transcript in
+            var t = Transcript()
+            t.add("What is this?", "A chart.")
+            return t
+        }()
+        let input = ChatGPTConnection.input(question: "And this?", snapshot: snapshot, transcript: transcript)
+        XCTAssertEqual(input.count, 3)
+        let last = try XCTUnwrap((input[2]["content"] as? [[String: Any]]))
+        XCTAssertEqual(last.map { $0["type"] as? String }, ["input_text", "input_image"])
+
+        let request = ChatGPTConnection.request(input: input, instructions: "S", choice: ModelChoice(model: "m", effort: .max), tools: true,
+                                                sessionID: "sid", tokens: tokens())
+        XCTAssertEqual(request.url?.absoluteString, "https://chatgpt.com/backend-api/codex/responses")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "chatgpt-account-id"), "acct")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "session_id"), "sid")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        XCTAssertEqual(json["store"] as? Bool, false)
+        XCTAssertEqual(json["stream"] as? Bool, true)
+        XCTAssertEqual(json["instructions"] as? String, "S")
+        XCTAssertEqual((json["reasoning"] as? [String: String])?["effort"], "high")
+        let tools = try XCTUnwrap(json["tools"] as? [[String: Any]])
+        XCTAssertEqual(tools.compactMap { $0["name"] as? String }, ScreenTool.names)
+        XCTAssertEqual(tools[1]["type"] as? String, "function")
+        XCTAssertNotNil(tools[1]["parameters"])
+
+        let plain = ChatGPTConnection.request(input: input, instructions: "S", choice: ModelChoice(model: "m"), tools: false,
+                                              sessionID: "sid", tokens: tokens())
+        XCTAssertNil((try JSONSerialization.jsonObject(with: XCTUnwrap(plain.httpBody)) as? [String: Any])?["tools"])
+    }
+
+    func testTurnCollectsWordsAndToolCalls() throws {
+        var turn = ResponsesTurn()
+        let events: [[String: Any]] = [
+            ["type": "response.output_text.delta", "delta": "On it."],
+            ["type": "response.output_item.done", "item": ["type": "message", "role": "assistant"]],
+            ["type": "response.output_item.done", "item": ["type": "function_call", "call_id": "c1", "name": "click", "arguments": "{\"x\":4}"]],
+            ["type": "response.completed", "response": [String: Any]()],
+        ]
+        XCTAssertEqual(try events.compactMap { try turn.feed($0) }, ["On it."])
+        XCTAssertTrue(turn.finished)
+        XCTAssertEqual(turn.toolCalls.count, 1)
+        XCTAssertEqual(turn.toolCalls[0].callID, "c1")
+        XCTAssertEqual(turn.toolCalls[0].arguments, "{\"x\":4}")
+    }
+
+    func testTurnFailures() {
+        var turn = ResponsesTurn()
+        XCTAssertThrowsError(try turn.feed(["type": "response.failed", "response": ["error": ["code": "rate_limit_exceeded"]]])) {
+            XCTAssertEqual($0 as? ProviderError, .rateLimited(retryAfter: nil))
+        }
+        XCTAssertThrowsError(try turn.feed(["type": "error", "message": "nope"])) {
+            XCTAssertEqual($0 as? ProviderError, .badRequest("nope"))
+        }
+    }
+
+    func testNoModelIsHardcoded() {
+        XCTAssertEqual(ProviderSettings().chatgpt.model, "")
+        XCTAssertEqual(ChatGPTConnection.preferred(from: ["gpt-a", "gpt-6.1-luna", "gpt-6.1-terra"]), "gpt-6.1-luna")
+        XCTAssertEqual(ChatGPTConnection.preferred(from: ["GPT 6.1 Luna"]), "GPT 6.1 Luna")
+        XCTAssertEqual(ChatGPTConnection.preferred(from: ["gpt-a", "gpt-b"]), "gpt-a")
+        XCTAssertNil(ChatGPTConnection.preferred(from: []))
+    }
+
+    func testModelListSkipsHiddenModels() {
+        let json: [String: Any] = ["models": [["slug": "a"], ["slug": "b", "visibility": "hide"], ["slug": "c", "visibility": "list"]]]
+        XCTAssertEqual(ChatGPTConnection.models(in: json), ["a", "c"])
+    }
+
+    // MARK: Refresh
+
+    final class Stub: URLProtocol {
+        nonisolated(unsafe) static var handler: ((URLRequest) -> (Int, [String: Any]))?
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+        override func startLoading() {
+            let (status, json) = Self.handler?(request) ?? (500, [:])
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: (try? JSONSerialization.data(withJSONObject: json)) ?? Data())
+            client?.urlProtocolDidFinishLoading(self)
+        }
+        override func stopLoading() {}
+    }
+
+    final class Box: @unchecked Sendable { var tokens: ChatGPTTokens? }
+
+    func account(_ start: ChatGPTTokens?) -> (ChatGPTAccount, Box) {
+        let box = Box()
+        box.tokens = start
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Stub.self]
+        let store = ChatGPTTokenStore(load: { box.tokens }, save: { box.tokens = $0 })
+        return (ChatGPTAccount(store: store, session: URLSession(configuration: configuration)), box)
+    }
+
+    func testFreshTokensAreNotRefreshed() async throws {
+        Stub.handler = { _ in XCTFail("no refresh expected"); return (500, [:]) }
+        let (account, _) = account(tokens())
+        let current = try await account.current()
+        XCTAssertEqual(current.accessToken, "access")
+    }
+
+    func testOldTokensAreRefreshedAndSaved() async throws {
+        Stub.handler = { request in
+            let body = String(decoding: request.httpBody ?? request.httpBodyStream.map { stream -> Data in
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    data.append(buffer, count: count)
+                }
+                return data
+            }!, as: UTF8.self)
+            XCTAssertTrue(body.contains("grant_type=refresh_token"))
+            XCTAssertTrue(body.contains("refresh_token=old"))
+            return (200, ["access_token": "new", "expires_in": 3600.0])
+        }
+        let (account, box) = account(tokens(access: "stale", refresh: "old", expiresAt: Date().addingTimeInterval(10)))
+        let current = try await account.current()
+        XCTAssertEqual(current.accessToken, "new")
+        XCTAssertEqual(box.tokens?.accessToken, "new")
+        XCTAssertEqual(box.tokens?.refreshToken, "old")
+        XCTAssertEqual(box.tokens?.accountID, "acct")
+    }
+
+    func testRefreshTokenThatChatGPTRefusesMeansSignedOut() async {
+        Stub.handler = { _ in (400, ["error": "invalid_grant"]) }
+        let (account, _) = account(tokens(expiresAt: Date().addingTimeInterval(10)))
+        do {
+            _ = try await account.current()
+            XCTFail("expected a sign-out")
+        } catch {
+            XCTAssertEqual(error as? ProviderError, .chatgptSignedOut)
+        }
+    }
+
+    func testNoTokensMeansSignedOut() async {
+        let (account, _) = account(nil)
+        do {
+            _ = try await account.current()
+            XCTFail("expected a sign-out")
+        } catch {
+            XCTAssertEqual(error as? ProviderError, .chatgptSignedOut)
+        }
+    }
+}

@@ -1,12 +1,13 @@
 import Foundation
 
 public enum ProviderKind: String, CaseIterable, Sendable {
-    case hermes, claude, anthropic, custom
+    case hermes, claude, chatgpt, anthropic, custom
 
     public var title: String {
         switch self {
         case .hermes: "Hermes"
         case .claude: "Claude subscription"
+        case .chatgpt: "ChatGPT subscription"
         case .anthropic: "Anthropic API"
         case .custom: "OpenAI-compatible"
         }
@@ -30,11 +31,12 @@ public struct ModelChoice: Equatable, Sendable {
     }
 }
 
-/// The `provider`, `claude`, `anthropic` and `custom` keys of `~/.config/brah/config.json`.
+/// The `provider`, `claude`, `chatgpt`, `anthropic` and `custom` keys of `~/.config/brah/config.json`.
 /// Keys live in the Keychain. Without a `provider` key Brah uses Hermes, as before.
 public struct ProviderSettings: Equatable, Sendable {
     public var active: ProviderKind
     public var claude: ModelChoice
+    public var chatgpt: ModelChoice
     public var anthropic: ModelChoice
     public var custom: ModelChoice
     /// The base URL, with the version path: `http://localhost:11434/v1`.
@@ -46,11 +48,13 @@ public struct ProviderSettings: Equatable, Sendable {
 
     public init(active: ProviderKind = .hermes,
                 claude: ModelChoice = ModelChoice(model: "haiku"),
+                chatgpt: ModelChoice = ModelChoice(model: ""),
                 anthropic: ModelChoice = ModelChoice(model: "claude-haiku-5-5"),
                 custom: ModelChoice = ModelChoice(model: ""),
                 customURL: String = "", customSendsEffort: Bool = false) {
         self.active = active
         self.claude = claude
+        self.chatgpt = chatgpt
         self.anthropic = anthropic
         self.custom = custom
         self.customURL = customURL
@@ -68,6 +72,7 @@ public struct ProviderSettings: Equatable, Sendable {
         let custom = json["custom"] as? [String: Any]
         self.init(active: (json["provider"] as? String).flatMap(ProviderKind.init(rawValue:)) ?? .hermes,
                   claude: choice("claude", defaults.claude),
+                  chatgpt: choice("chatgpt", defaults.chatgpt),
                   anthropic: choice("anthropic", defaults.anthropic),
                   custom: choice("custom", defaults.custom),
                   customURL: custom?["url"] as? String ?? "",
@@ -85,7 +90,7 @@ public struct ProviderSettings: Equatable, Sendable {
     public func applied(to json: [String: Any]) -> [String: Any] {
         var json = json
         json["provider"] = active.rawValue
-        for (key, choice) in [("claude", claude), ("anthropic", anthropic), ("custom", custom)] {
+        for (key, choice) in [("claude", claude), ("chatgpt", chatgpt), ("anthropic", anthropic), ("custom", custom)] {
             var section = json[key] as? [String: Any] ?? [:]
             section["model"] = choice.model
             section["effort"] = choice.effort.rawValue
@@ -104,6 +109,7 @@ public struct ProviderSettings: Equatable, Sendable {
             switch active {
             case .hermes: nil
             case .claude: claude.effort
+            case .chatgpt: chatgpt.effort
             case .anthropic: anthropic.effort
             case .custom: custom.effort
             }
@@ -113,6 +119,7 @@ public struct ProviderSettings: Equatable, Sendable {
             switch active {
             case .hermes: break
             case .claude: claude.effort = newValue
+            case .chatgpt: chatgpt.effort = newValue
             case .anthropic: anthropic.effort = newValue
             case .custom: custom.effort = newValue
             }
@@ -131,6 +138,7 @@ public enum ProviderError: LocalizedError, Equatable {
     case offline
     case notInstalled
     case signedOut
+    case chatgptSignedOut
     case refused
 
     public var errorDescription: String? {
@@ -146,6 +154,7 @@ public enum ProviderError: LocalizedError, Equatable {
         case .offline: "Brah cannot reach the provider. Check the connection or the address in Settings."
         case .notInstalled: "Claude Code is not installed. Install it from claude.com/code, sign in, then try again."
         case .signedOut: "Claude Code is not signed in. Run claude in Terminal and sign in, then try again."
+        case .chatgptSignedOut: "Brah is not signed in to ChatGPT. Open Settings and sign in again."
         case .refused: "The model declined to answer that."
         }
     }

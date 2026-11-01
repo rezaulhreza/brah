@@ -57,6 +57,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model?.stopRecording()
+        model?.cancelSignIn()
         model = nil
         window = nil
         onOpen(false)
@@ -79,6 +80,10 @@ final class SettingsModel: ObservableObject {
     private let preview = AVSpeechSynthesizer()
     /// Model ids from the provider, after a check.
     @Published var models: [String] = []
+    /// The ChatGPT sign-in. It takes effect at once: it does not wait for Save.
+    @Published private(set) var chatgpt: ChatGPTTokens? = ChatGPTTokenStore.keychain.load()
+    @Published private(set) var signingIn = false
+    private var signInTask: Task<Void, Never>?
     @Published var check: (ok: Bool, text: String)?
     /// The secrets in the fields, by Keychain account.
     @Published var secrets: [String: String]
@@ -121,6 +126,7 @@ final class SettingsModel: ObservableObject {
     private init(demo settings: EditableSettings, secrets: [String: String]) {
         self.settings = settings
         providers = ProviderSettings(active: .claude)
+        chatgpt = nil
         responses = ResponseSettings()
         speech = SpeechSettings(provider: .deepgram, deepgramVoice: "aura-2-athena-en")
         self.secrets = secrets
@@ -224,6 +230,13 @@ final class SettingsModel: ObservableObject {
             return
         }
 
+        if providers.active == .chatgpt {
+            guard chatgpt != nil else {
+                saveProblem = "Sign in with ChatGPT first."
+                return
+            }
+        }
+
         if providers.active == .custom {
             guard let url = URL(string: providers.customURL.trimmingCharacters(in: .whitespaces)),
                   ["http", "https"].contains(url.scheme?.lowercased()), url.host != nil else {
@@ -269,6 +282,22 @@ final class SettingsModel: ObservableObject {
                 guard let path = ClaudeCodeConnection.executable() else { throw ProviderError.notInstalled }
                 check = (true, "Claude Code found at \(path.path). It uses your Claude sign-in.")
                 return
+            case .chatgpt:
+                guard let account = chatgpt else { throw ProviderError.chatgptSignedOut }
+                let who = account.email ?? "your ChatGPT account"
+                do {
+                    models = try await ChatGPTConnection.models()
+                } catch ProviderError.chatgptSignedOut {
+                    throw ProviderError.chatgptSignedOut
+                } catch {
+                    check = (true, "Signed in as \(who). Brah could not load the model list, so type the model name.")
+                    return
+                }
+                if providers.chatgpt.model.trimmingCharacters(in: .whitespaces).isEmpty {
+                    providers.chatgpt.model = ChatGPTConnection.preferred(from: models) ?? ""
+                }
+                check = (true, "Signed in as \(who). \(models.count) models.")
+                return
             case .anthropic:
                 let key = secrets[Secrets.anthropicKey, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty else { throw ProviderError.noKey("the Anthropic API") }
@@ -285,8 +314,56 @@ final class SettingsModel: ObservableObject {
         }
     }
 
+    func signInToChatGPT() {
+        guard !signingIn else { return }
+        signingIn = true
+        check = nil
+        signInTask = Task {
+            defer {
+                signingIn = false
+                signInTask = nil
+            }
+            do {
+                let tokens = try await ChatGPTSignIn.run()
+                try await ChatGPTAccount.shared.signIn(tokens)
+                chatgpt = tokens
+                saveProblem = nil
+                await loadChatGPTModels()
+            } catch is CancellationError {
+                return
+            } catch {
+                check = (false, Self.text(error))
+            }
+        }
+    }
+
+    func cancelSignIn() {
+        signInTask?.cancel()
+    }
+
+    /// Loads the model list. An empty model setting gets Brah's pick from it.
+    private func loadChatGPTModels() async {
+        guard let list = try? await ChatGPTConnection.models(), !list.isEmpty else { return }
+        models = list
+        if providers.chatgpt.model.trimmingCharacters(in: .whitespaces).isEmpty {
+            providers.chatgpt.model = ChatGPTConnection.preferred(from: list) ?? ""
+        }
+    }
+
+    func signOutOfChatGPT() {
+        do {
+            try ChatGPTTokenStore.keychain.save(nil)
+            chatgpt = nil
+            check = nil
+            models = []
+        } catch {
+            saveProblem = Self.text(error)
+        }
+    }
+
     func cancel() {
         stopRecording()
+        cancelSignIn()
         onClose(false)
     }
 
@@ -364,6 +441,10 @@ struct SettingsView: View {
                     ForEach(ProviderSettings.claudeModels, id: \.self) { Text($0.capitalized).tag($0) }
                 }
                 effortPicker($model.providers.claude.effort)
+            case .chatgpt:
+                chatgptAccountRow
+                modelField($model.providers.chatgpt.model)
+                effortPicker($model.providers.chatgpt.effort)
             case .anthropic:
                 SecureField("API key", text: secret(Secrets.anthropicKey), prompt: Text("sk-ant-…"))
                 modelField($model.providers.anthropic.model)
@@ -424,8 +505,31 @@ struct SettingsView: View {
         switch model.providers.active {
         case .hermes: "Your own Hermes agent, on this Mac or on a server. It can click for you after a yes."
         case .claude: "Uses your Claude plan through Claude Code. Install it and sign in once."
+        case .chatgpt: "Uses your ChatGPT plan. Sign in once in your browser. You do not need the Codex app."
         case .anthropic: "Pay per use with a key from console.anthropic.com."
         case .custom: "Any server with an OpenAI-style API: Ollama, LM Studio, OpenRouter, Groq. Pick a model that can see images."
+        }
+    }
+
+    @ViewBuilder
+    private var chatgptAccountRow: some View {
+        HStack {
+            if model.signingIn {
+                ProgressView().controlSize(.small)
+                Text("Waiting for you to sign in, in your browser…")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") { model.cancelSignIn() }
+            } else if let account = model.chatgpt {
+                Text("Signed in as \(account.email ?? "your ChatGPT account")" + (account.plan.map { " (\($0.capitalized))" } ?? ""))
+                Spacer()
+                Button("Sign out") { model.signOutOfChatGPT() }
+            } else {
+                Text("Not signed in")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Sign in with ChatGPT") { model.signInToChatGPT() }
+            }
         }
     }
 

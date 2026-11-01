@@ -172,6 +172,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             agent = HermesSettings.load().map { HermesConnection(settings: $0, responses: responses) }
         case .claude:
             agent = ClaudeCodeConnection(choice: providers.claude, responses: responses, tools: tools)
+        case .chatgpt:
+            agent = ChatGPTTokenStore.keychain.load() == nil ? nil
+                : ChatGPTConnection(choice: providers.chatgpt, responses: responses, actions: actions)
         case .anthropic:
             agent = (environment["ANTHROPIC_API_KEY"] ?? Secrets.get(Secrets.anthropicKey))
                 .map { AnthropicConnection(key: $0, choice: providers.anthropic, responses: responses, actions: actions) }
