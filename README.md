@@ -10,6 +10,13 @@ its own cursor. Ask it to do the thing, and it clicks and types for you. After y
 before. Works with Claude, Ollama and Hermes. Native app for macOS 14 or later, free for
 personal use.
 
+![Brah works through six tasks on a test dashboard and asks before it sends an invoice](docs/demo.gif)
+
+Six tasks on the [benchmark page](demo/benchmark.html), at 2x speed. Brah reads the dashboard,
+opens tabs, changes the date range, starts a campaign, then finds an order and stops to ask
+before it sends the invoice. The recording has no sound. In real use, Brah says each step out
+loud as it goes. [Watch it at full speed (2.5 minutes)](docs/demo.mp4).
+
 Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer.
 
 **Bruh** is the face you make when the Export button was right there all along.
