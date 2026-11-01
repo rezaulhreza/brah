@@ -15,7 +15,7 @@ personal use.
 Six tasks on the [benchmark page](demo/benchmark.html), at 2x speed. Brah reads the dashboard,
 opens tabs, changes the date range, starts a campaign, then finds an order and stops to ask
 before it sends the invoice. The recording has no sound. In real use, Brah says each step out
-loud as it goes. [Watch it at full speed (2.5 minutes)](docs/demo.mp4).
+loud as it goes. [Download it at full speed (MP4, 2.5 minutes)](https://github.com/rezaulhreza/brah/raw/main/docs/demo.mp4).
 
 Brah is said *brah*, as in "ho, brah!", not *bruh*. It lives next to your mouse pointer. Text to
 speech voices cannot say *bruh* the right way either, and an assistant that talks should be able
