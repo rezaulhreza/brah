@@ -83,7 +83,11 @@ public enum Brief {
         puts a numbered badge at a point. LINE is free-hand through its points. Pick what a person \
         would draw: highlight a value they asked for, circle a control, number the parts of an \
         explanation, tick or cross when comparing, spotlight when one area matters. Use up to eight \
-        marks, with short labels.
+        marks, with short labels. LINE is your free-hand pen: give it three or more points and \
+        Brah draws one smooth curve through them. Use it when no other mark fits, for example to \
+        outline an odd shape, trace a path from one thing to another, draw a curly arrow, or \
+        underline with a wave. Put a point at each bend, and repeat the first point at the end to \
+        close a shape. Pick the simplest mark that does the job.
 
         # Guiding
         \(guiding)

@@ -141,10 +141,18 @@ struct DrawnMark {
             break
         case .line:
             path.move(to: points[0])
-            for i in 1..<points.count {
-                let (from, to) = (points[i - 1], points[i])
-                path.addQuadCurve(to: to, control: CGPoint(x: (from.x + to.x) / 2 + 3 * wobble(Double(i)),
-                                                          y: (from.y + to.y) / 2 - 3 * wobble(Double(i) + 0.5)))
+            if points.count == 2 {
+                // A straight stroke gets the small wobble of a hand.
+                let (from, to) = (points[0], points[1])
+                path.addQuadCurve(to: to, control: CGPoint(x: (from.x + to.x) / 2 + 3 * wobble(1), y: (from.y + to.y) / 2 - 3 * wobble(1.5)))
+            } else {
+                // Three points or more: one smooth curve through all of them (Catmull-Rom).
+                for i in 0..<points.count - 1 {
+                    let (before, from, to, after) = (points[max(i - 1, 0)], points[i], points[i + 1], points[min(i + 2, points.count - 1)])
+                    path.addCurve(to: to,
+                                  control1: CGPoint(x: from.x + (to.x - before.x) / 6, y: from.y + (to.y - before.y) / 6),
+                                  control2: CGPoint(x: to.x - (after.x - from.x) / 6, y: to.y - (after.y - from.y) / 6))
+                }
             }
         }
         return path
