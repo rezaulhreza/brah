@@ -7,7 +7,7 @@
 **A voice AI assistant for macOS that sees your screen.** Hold a key or say **"Hey Brah"**, ask
 about whatever is on your screen, and your own AI answers out loud and points at the thing with
 its own cursor. Ask it to do the thing, and it clicks and types for you. After you say yes. Not
-before. Works with Claude, Ollama and Hermes. Native app for macOS 14 or later, free for
+before. Works with Claude, ChatGPT, Ollama and Hermes. Native app for macOS 14 or later, free for
 personal use.
 
 ![Brah works through six tasks on a test dashboard and asks before it sends an invoice](docs/demo.gif)
@@ -26,8 +26,8 @@ to say its own name.
 
 That face is the icon: a cursor giving you the side-eye.
 
-Brah sees, listens, talks and points. Your AI does the thinking. Pick Hermes, Claude with your
-own plan or an API key, or any OpenAI-compatible server, Ollama included.
+Brah sees, listens, talks and points. Your AI does the thinking. Pick Hermes, Claude or ChatGPT with
+your own plan, an Anthropic API key, or any OpenAI-compatible server, Ollama included.
 
 ![Brah answers out loud and points at the Export button](docs/screenshots/answer.png)
 
@@ -163,9 +163,10 @@ Open **Settings** from the Brah menu (or press ⌘,). The AI tab picks the provi
 | Provider | What you need |
 |---|---|
 | Claude subscription | Claude Code installed and signed in. Brah runs it with its tools off. |
+| ChatGPT subscription | A ChatGPT plan with Codex. Click **Sign in with ChatGPT** and sign in in your browser. You do not need the Codex app. |
 | Anthropic API | An API key from console.anthropic.com. |
 | OpenAI-compatible | A server address such as `http://localhost:11434/v1` (Ollama), and a key if it needs one. |
-| Hermes | See below. Hermes and both Claude routes can click for you today. |
+| Hermes | See below. Hermes, both Claude routes and ChatGPT can click for you today. |
 
 Both Claude routes start on Haiku 5.5 at medium effort. Change the model and the effort in
 Settings, or the effort from the menu in the middle of a conversation. **Check** tests the key
@@ -174,7 +175,12 @@ and loads the model list. Keys go in the Keychain.
 Under Responses, pick short, normal or detailed answers, and write custom instructions that
 every provider gets ("Call me Rez. Use British English.").
 
-`BRAH_PROVIDER=claude|anthropic|custom|hermes` picks a provider for one run, without a change to
+The ChatGPT route signs in by itself with the same browser sign-in as the Codex app, and keeps
+the tokens in the Keychain. Brah listens on `127.0.0.1:1455` (or `1457`) for the end of the
+sign-in, so close any other sign-in, such as `codex login`, first. **Check** lists the models
+that your plan can use. With no model set, Brah picks GPT 6.1 Luna when your plan has it, else the first model.
+
+`BRAH_PROVIDER=claude|chatgpt|anthropic|custom|hermes` picks a provider for one run, without a change to
 the config file.
 
 ## Connect Hermes
@@ -254,7 +260,7 @@ System Voice > Manage Voices.
 
 ## Roadmap
 
-1. **More providers.** The OpenAI API, the Codex subscription, and Ollama as its own choice.
+1. **More providers.** The OpenAI API, and Ollama as its own choice.
 2. **Clicks for every provider.** Claude does it now. Next: OpenAI-compatible servers, and
    Always allow rules that last after Brah quits.
 3. **More voices.** Speech to text from Groq, OpenAI Whisper and local models. OpenAI Realtime
